@@ -30,7 +30,7 @@ public:
     void Bawrite(Buf *bp);                         /* 异步写磁盘块 */
 
     void ClrBuf(Buf *bp); /* 清空缓冲区内容 */
-    // void Bflush(short dev); /* 将dev指定设备队列中延迟写的缓存全部输出到磁盘 */
+    void Bflush(short dev); /* 将dev指定设备队列中延迟写的缓存全部输出到磁盘 */
     // bool Swap(int blkno, unsigned long addr, int count, enum Buf::BufFlag flag);
     // /* Swap I/O 用于进程图像在内存和盘交换区之间传输
     //  * blkno: 交换区中盘块号；addr:  进程图像(传送部分)内存起始地址；

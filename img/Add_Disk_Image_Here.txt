@@ -1,1 +1,2 @@
 FOR WINDOWS:在img文件夹下使用cmd命令`fsutil file createnew disk.img 536870912`创建512M的虚拟磁盘文件
+FOR WINDOWS:在img文件夹下使用cmd命令`fsutil file createnew disk.img 8388608`创建8M的虚拟磁盘文件

@@ -15,7 +15,8 @@
             "cStandard": "c17",
             "cppStandard": "gnu++14",
             "intelliSenseMode": "windows-gcc-x64",
-            "configurationProvider": "ms-vscode.cmake-tools"
+            "configurationProvider": "ms-vscode.cmake-tools",
+            "compilerPath": "D:/MinGWw64-posix/mingw64/bin/g++.exe"
         }
     ],
     "version": 4

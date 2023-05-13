@@ -21,14 +21,15 @@ public:
         CREATE = 1, /* 以新建文件方式搜索目录 */
         DELETE = 2  /* 以删除文件方式搜索目录 */
     };
-
+    static FileManager  inst;
     /* Functions */
 public:
     /* Constructors */
     FileManager();
     /* Destructors */
     ~FileManager();
-
+    
+    static FileManager *getInst() { return &inst; };
     /*
      * @comment 初始化对全局对象的引用
      */

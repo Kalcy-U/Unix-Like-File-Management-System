@@ -1,10 +1,11 @@
 #include "../includes/Buf.h"
 #include "../includes/BufferManager.h"
 #include "../includes/DeviceManager.h"
+#include "../includes/precompile.h"
 #include <iomanip>
 #include <string.h>
 #include <thread>
-#include <unistd.h>
+
 void thread_awrite(BufferManager *bfm, Buf *bp)
 {
     bfm->Bawrite(bp);
@@ -89,7 +90,7 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
     else if (buf_reuse == nullptr && !bFreeList.b_back)
     {
         // 睡会儿算了
-        sleep(200);
+        sleepms(200);
         return GetBlk(dev, blkno);
     }
     // 找到了可重用的缓存
@@ -99,6 +100,8 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
     {
         buf_mutex[buf_reuse->b_no].lock();
         buf_mutex[buf_reuse->b_no].unlock();
+        // while (buf_reuse->b_flags & Buf::BufFlag::B_USING)
+        //     sleepms(600);
         NotAvail(buf_reuse);
         return buf_reuse;
     }
@@ -115,18 +118,20 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
 /// @param bp
 void BufferManager::Brelse(Buf *bp)
 {
-
-    bp->b_flags &= ~(Buf::B_USING | Buf::B_ASYNC);
-    // 放入队尾
-    Buf *freeP = &bFreeList;
-    while (freeP->b_back != nullptr)
-        freeP = freeP->b_back;
-    freeP->b_back = bp;
-    bp->b_forw = freeP;
-    bp->b_back = nullptr;
-    std::cout << "buffer " << bp->b_no << " is released." << std::endl;
+    if (bp != nullptr && (bp->b_flags & Buf::B_USING)) // 如果B_USING=false，不再执行
+    {
+        bp->b_flags &= ~(Buf::B_USING | Buf::B_ASYNC);
+        // 放入队尾
+        Buf *freeP = &bFreeList;
+        while (freeP->b_back != nullptr)
+            freeP = freeP->b_back;
+        freeP->b_back = bp;
+        bp->b_forw = freeP;
+        bp->b_back = nullptr;
+        std::cout << "buffer " << bp->b_no << " is released." << std::endl;
+    }
 }
-/// @brief 读一个块，包含请求块、同步读、加done标、块释放
+/// @brief 读一个块，包含请求块、同步读、加done标，不含块释放
 /// @param dev
 /// @param blkno
 /// @return
@@ -141,7 +146,7 @@ Buf *BufferManager::Bread(int dev, int blkno)
     }
     DeviceManager::getInst()->GetBlockDevice(dev)->Read(bp);
     bp->b_flags |= Buf::BufFlag::B_DONE;
-    Brelse(bp);
+    // Brelse(bp);
     return bp;
 }
 
@@ -194,8 +199,9 @@ void BufferManager::Bawrite(Buf *bp)
     DeviceManager::getInst()->GetBlockDevice(bp->b_dev)->Write(bp);
     bp->b_flags &= ~Buf::B_ASYNC;
     bp->b_flags |= Buf::BufFlag::B_DONE;
-    buf_mutex[bp->b_no].unlock();
+
     Brelse(bp);
+    buf_mutex[bp->b_no].unlock();
     return;
 }
 /// @brief 清缓存
@@ -208,4 +214,8 @@ void BufferManager::ClrBuf(Buf *bp)
     memset((void *)pvoid, 0, BUFFER_SIZE);
 
     return;
+}
+void BufferManager::Bflush(short dev)
+{
+    // TODO
 }

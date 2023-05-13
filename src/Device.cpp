@@ -23,14 +23,15 @@ VirtualDist::VirtualDist(int _devId, int _NSECTOR, char const *name) : BlockDevi
 }
 int VirtualDist::bnoToMem(int bno)
 {
-    return MANAGEMENT_SIZE + bno * NSECTOR;
+    return MANAGEMENT_SIZE + bno * SECTOR_SIZE;
 }
 int VirtualDist::Read(Buf *bp)
 {
 
     int bnum = bp->b_blkno;
     int mno = bnoToMem(bnum);
-    fstr.getline((char *)bp->b_addr, NSECTOR, '\0');
+    fstr.seekg(mno, std::ios::beg);
+    fstr.getline((char *)bp->b_addr, SECTOR_SIZE, '\0');
 
     return 0;
 }
@@ -39,11 +40,13 @@ void VirtualDist::Write(Buf *bp)
     int bnum = bp->b_blkno;
     int mno = bnoToMem(bnum);
     fstr.seekp(mno, std::ios::beg);
-    fstr.write((char *)bp->b_addr, 512);
-    printf("VirtualDist::Write : %s tellp=%d\n", fstr.fail() ? "fail" : "succeed", fstr.tellp());
+    printf("VirtualDist::Write : pos=mno=%d %s\n", mno, fstr.fail() ? "fail" : "succeed");
+    fstr.write((char *)bp->b_addr, SECTOR_SIZE);
+    printf("VirtualDist::Write : %s tellp=%d,count=%d\n", fstr.fail() ? "fail" : "succeed", int(fstr.tellp()), int(fstr.tellp()) - mno);
 }
 VirtualDist::~VirtualDist()
 {
     if (fstr.is_open())
         fstr.close();
+    printf("VirtualDist::~VirtualDist : close dist %s\n", fstr.fail() ? "failed" : "succeed");
 }

@@ -1,2 +1,4 @@
 build/
 img/Disk.img
+.vs/
+*/*.exe

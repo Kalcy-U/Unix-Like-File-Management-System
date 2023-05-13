@@ -1,6 +1,8 @@
 #include "../includes/Inode.h"
-
-#include "../includesDeviceManager.h"
+#include "../includes/DeviceManager.h"
+#include "../includes/User.h"
+#include "../includes/Utility.hpp"
+#include "../includes/Inode.h"
 // #include "Kernel.h"
 
 /*==============================class Inode===================================*/
@@ -10,6 +12,7 @@ int Inode::rablock = 0;
 /* 内存打开 i节点*/
 Inode::Inode()
 {
+
 	/* 清空Inode对象中的数据 */
 	// this->Clean();
 	/* 去除this->Clean();的理由：
@@ -40,18 +43,18 @@ Inode::~Inode()
 {
 	// nothing to do here
 }
-
+/*读一个块到用户目标区*/
 void Inode::ReadI()
 {
 	int lbn;	/* 文件逻辑块号 */
 	int bn;		/* lbn对应的物理盘块号 */
 	int offset; /* 当前字符块内起始传送位置 */
 	int nbytes; /* 传送至用户目标区字节数量 */
-	short dev;
+	int dev;
 	Buf *pBuf;
-	User &u = Kernel::Instance().GetUser();
-	BufferManager &bufMgr = Kernel::Instance().GetBufferManager();
-	DeviceManager &devMgr = Kernel::Instance().GetDeviceManager();
+	User &u = *User::getInst();
+	BufferManager &bufMgr = *BufferManager::getInst();
+	DeviceManager &devMgr = *DeviceManager::getInst();
 
 	if (0 == u.u_IOParam.m_Count)
 	{
@@ -61,22 +64,26 @@ void Inode::ReadI()
 
 	this->i_flag |= Inode::IACC;
 
-	/* 如果是字符设备文件 ，调用外设读函数*/
-	if ((this->i_mode & Inode::IFMT) == Inode::IFCHR)
-	{
-		short major = Utility::GetMajor(this->i_addr[0]);
-
-		devMgr.GetCharDevice(major).Read(this->i_addr[0]);
-		return;
-	}
-
 	/* 一次一个字符块地读入所需全部数据，直至遇到文件尾 */
 	while (User::NOERROR == u.u_error && u.u_IOParam.m_Count != 0)
 	{
 		lbn = bn = u.u_IOParam.m_Offset / Inode::BLOCK_SIZE;
 		offset = u.u_IOParam.m_Offset % Inode::BLOCK_SIZE;
 		/* 传送到用户区的字节数量，取读请求的剩余字节数与当前字符块内有效字节数较小值 */
-		nbytes = Utility::Min(Inode::BLOCK_SIZE - offset /* 块内有效字节数 */, u.u_IOParam.m_Count);
+		nbytes = std::min(Inode::BLOCK_SIZE - offset /* 块内有效字节数 */, u.u_IOParam.m_Count);
+
+		int remain = this->i_size - u.u_IOParam.m_Offset;
+		/* 如果已读到超过文件结尾 */
+		if (remain <= 0)
+		{
+			return;
+		}
+		/* 传送的字节数量还取决于剩余文件的长度 */
+		nbytes = std::min(nbytes, remain);
+
+		/* 将逻辑块号lbn转换成物理盘块号bn ，Bmap有设置Inode::rablock。当UNIX认为获取预读块的开销太大时，
+		 * 会放弃预读，此时 Inode::rablock 值为 0。
+		 * */
 
 		if ((this->i_mode & Inode::IFMT) != Inode::IFBLK)
 		{ /* 如果不是特殊块设备文件 */
@@ -88,7 +95,7 @@ void Inode::ReadI()
 				return;
 			}
 			/* 传送的字节数量还取决于剩余文件的长度 */
-			nbytes = Utility::Min(nbytes, remain);
+			nbytes = std::min(nbytes, remain);
 
 			/* 将逻辑块号lbn转换成物理盘块号bn ，Bmap有设置Inode::rablock。当UNIX认为获取预读块的开销太大时，
 			 * 会放弃预读，此时 Inode::rablock 值为 0。
@@ -105,15 +112,15 @@ void Inode::ReadI()
 			Inode::rablock = bn + 1;
 		}
 
-		if (this->i_lastr + 1 == lbn) /* 如果是顺序读，则进行预读 */
-		{
-			/* 读当前块，并预读下一块 */
-			pBuf = bufMgr.Breada(dev, bn, Inode::rablock);
-		}
-		else
-		{
-			pBuf = bufMgr.Bread(dev, bn);
-		}
+		// if (this->i_lastr + 1 == lbn) /* 如果是顺序读，则进行预读 */
+		// {
+		// 	/* 读当前块，并预读下一块 */
+		// 	pBuf = bufMgr.Breada(dev, bn, Inode::rablock);
+		// }
+		// else
+
+		pBuf = bufMgr.Bread(dev, bn);
+
 		/* 记录最近读取字符块的逻辑块号 */
 		this->i_lastr = lbn;
 
@@ -133,7 +140,7 @@ void Inode::ReadI()
 		bufMgr.Brelse(pBuf); /* 使用完缓存，释放该资源 */
 	}
 }
-
+/*将IOParam中的文件目标位置拷贝到磁盘中*/
 void Inode::WriteI()
 {
 	int lbn;	/* 文件逻辑块号 */
@@ -142,21 +149,11 @@ void Inode::WriteI()
 	int nbytes; /* 传送字节数量 */
 	short dev;
 	Buf *pBuf;
-	User &u = Kernel::Instance().GetUser();
-	BufferManager &bufMgr = Kernel::Instance().GetBufferManager();
-	DeviceManager &devMgr = Kernel::Instance().GetDeviceManager();
-
+	User &u = *User::getInst();
+	BufferManager &bufMgr = *BufferManager::getInst();
+	DeviceManager &devMgr = *DeviceManager::getInst();
 	/* 设置Inode被访问标志位 */
 	this->i_flag |= (Inode::IACC | Inode::IUPD);
-
-	/* 对字符设备的访问 */
-	if ((this->i_mode & Inode::IFMT) == Inode::IFCHR)
-	{
-		short major = Utility::GetMajor(this->i_addr[0]);
-
-		devMgr.GetCharDevice(major).Write(this->i_addr[0]);
-		return;
-	}
 
 	if (0 == u.u_IOParam.m_Count)
 	{
@@ -168,7 +165,7 @@ void Inode::WriteI()
 	{
 		lbn = u.u_IOParam.m_Offset / Inode::BLOCK_SIZE;
 		offset = u.u_IOParam.m_Offset % Inode::BLOCK_SIZE;
-		nbytes = Utility::Min(Inode::BLOCK_SIZE - offset, u.u_IOParam.m_Count);
+		nbytes = std::min(Inode::BLOCK_SIZE - offset, u.u_IOParam.m_Count);
 
 		if ((this->i_mode & Inode::IFMT) != Inode::IFBLK)
 		{ /* 普通文件 */
@@ -247,9 +244,10 @@ int Inode::Bmap(int lbn)
 	int phyBlkno; /* 转换后的物理盘块号 */
 	int *iTable;  /* 用于访问索引盘块中一次间接、两次间接索引表 */
 	int index;
-	User &u = Kernel::Instance().GetUser();
-	BufferManager &bufMgr = Kernel::Instance().GetBufferManager();
-	FileSystem &fileSys = Kernel::Instance().GetFileSystem();
+	User &u = *User::getInst();
+	BufferManager &bufMgr = *BufferManager::getInst();
+	// DeviceManager &devMgr = *DeviceManager::getInst();
+	FileSystem &fileSys = *FileSystem::getInst();
 
 	/*
 	 * Unix V6++的文件索引结构：(小型、大型和巨型文件)
@@ -265,7 +263,7 @@ int Inode::Bmap(int lbn)
 
 	if (lbn >= Inode::HUGE_FILE_BLOCK)
 	{
-		u.u_error = User::EFBIG;
+		u.u_error = User::ErrorCode::EFBIG_;
 		return 0;
 	}
 
@@ -282,8 +280,7 @@ int Inode::Bmap(int lbn)
 		if (phyBlkno == 0 && (pFirstBuf = fileSys.Alloc(this->i_dev)) != NULL)
 		{
 			/*
-			 * 因为后面很可能马上还要用到此处新分配的数据块，所以不急于立刻输出到
-			 * 磁盘上；而是将缓存标记为延迟写方式，这样可以减少系统的I/O操作。
+			 * fileSys.Alloc分配一个干净块，dev和blkno指向一个物理块
 			 */
 			bufMgr.Bdwrite(pFirstBuf);
 			phyBlkno = pFirstBuf->b_blkno;
@@ -297,8 +294,7 @@ int Inode::Bmap(int lbn)
 		{
 			/*
 			 * i_addr[0] - i_addr[5]为直接索引表。如果预读块对应物理块号可以从
-			 * 直接索引表中获得，则记录在Inode::rablock中。如果需要额外的I/O开销
-			 * 读入间接索引块，就显得不太值得了。漂亮！
+			 * 直接索引表中获得，则记录在Inode::rablock中。
 			 */
 			Inode::rablock = this->i_addr[lbn + 1];
 		}
@@ -411,82 +407,87 @@ int Inode::Bmap(int lbn)
 
 void Inode::OpenI(int mode)
 {
-	short dev;
-	DeviceManager &devMgr = Kernel::Instance().GetDeviceManager();
-	User &u = Kernel::Instance().GetUser();
+	// short dev;
+	// User &u = *User::getInst();
+	// BufferManager &bufMgr = *BufferManager::getInst();
+	// DeviceManager &devMgr = *DeviceManager::getInst();
 
 	/*
 	 * 对于特殊块设备、字符设备文件，i_addr[]不再是
 	 * 磁盘块号索引表，addr[0]中存放了设备号dev
 	 */
-	dev = this->i_addr[0];
+	// dev = this->i_addr[0];
 
-	/* 提取主设备号 */
-	short major = Utility::GetMajor(dev);
+	// /* 提取主设备号 */
+	// short major = Utility::GetMajor(dev);
 
-	switch (this->i_mode & Inode::IFMT)
-	{
-	case Inode::IFCHR: /* 字符设备特殊类型文件 */
-		if (major >= devMgr.GetNChrDev())
-		{
-			u.u_error = User::ENXIO; /* no such device */
-			return;
-		}
-		devMgr.GetCharDevice(major).Open(dev, mode);
-		break;
+	// switch (this->i_mode & Inode::IFMT)
+	// {
+	// case Inode::IFCHR: /* 字符设备特殊类型文件 */
+	// 	if (major >= devMgr.GetNChrDev())
+	// 	{
+	// 		u.u_error = User::ENXIO_; /* no such device */
+	// 		return;
+	// 	}
+	// 	devMgr.GetCharDevice(major).Open(dev, mode);
+	// 	break;
 
-	case Inode::IFBLK: /* 块设备特殊类型文件 */
-		/* 检查设备号是否超出系统中块设备数量 */
-		if (major >= devMgr.GetNBlkDev())
-		{
-			u.u_error = User::ENXIO; /* no such device */
-			return;
-		}
-		/* 根据主设备号获取对应的块设备BlockDevice对象引用 */
-		BlockDevice &bdev = devMgr.GetBlockDevice(major);
-		/* 调用该设备的特定初始化逻辑 */
-		bdev.Open(dev, mode);
-		break;
-	}
+	// case Inode::IFBLK: /* 块设备特殊类型文件 */
+	// 	/* 检查设备号是否超出系统中块设备数量 */
+	// 	if (major >= devMgr.GetNBlkDev())
+	// 	{
+	// 		u.u_error = User::ENXIO_; /* no such device */
+	// 		return;
+	// 	}
+	// 	/* 根据主设备号获取对应的块设备BlockDevice对象引用 */
+	// 	BlockDevice &bdev = devMgr.GetBlockDevice(major);
+	// 	/* 调用该设备的特定初始化逻辑 */
+	// 	bdev.Open(dev, mode);
+	// 	break;
+	// }
 
 	return;
 }
 
 void Inode::CloseI(int mode)
 {
-	short dev;
-	DeviceManager &devMgr = Kernel::Instance().GetDeviceManager();
+	// short dev;
+	// DeviceManager &devMgr = Kernel::Instance().GetDeviceManager();
 
-	/* addr[0]中存放了设备号dev */
-	dev = this->i_addr[0];
+	// /* addr[0]中存放了设备号dev */
+	// dev = this->i_addr[0];
 
-	short major = Utility::GetMajor(dev);
+	// short major = Utility::GetMajor(dev);
 
-	/* 不再使用该文件,关闭特殊文件 */
-	if (this->i_count <= 1)
-	{
-		switch (this->i_mode & Inode::IFMT)
-		{
-		case Inode::IFCHR:
-			devMgr.GetCharDevice(major).Close(dev, mode);
-			break;
+	// /* 不再使用该文件,关闭特殊文件 */
+	// if (this->i_count <= 1)
+	// {
+	// 	switch (this->i_mode & Inode::IFMT)
+	// 	{
+	// 	case Inode::IFCHR:
+	// 		devMgr.GetCharDevice(major).Close(dev, mode);
+	// 		break;
 
-		case Inode::IFBLK:
-			/* 根据主设备号获取对应的块设备BlockDevice对象引用 */
-			BlockDevice &bdev = devMgr.GetBlockDevice(major);
-			/* 调用该设备的特定关闭逻辑 */
-			bdev.Close(dev, mode);
-			break;
-		}
-	}
+	// 	case Inode::IFBLK:
+	// 		/* 根据主设备号获取对应的块设备BlockDevice对象引用 */
+	// 		BlockDevice &bdev = devMgr.GetBlockDevice(major);
+	// 		/* 调用该设备的特定关闭逻辑 */
+	// 		bdev.Close(dev, mode);
+	// 		break;
+	// 	}
+	// }
 }
+
+/*更新Inode节点*/
 
 void Inode::IUpdate(int time)
 {
 	Buf *pBuf;
 	DiskInode dInode;
-	FileSystem &filesys = Kernel::Instance().GetFileSystem();
-	BufferManager &bufMgr = Kernel::Instance().GetBufferManager();
+	FileSystem &filesys = *FileSystem::getInst();
+	User &u = *User::getInst();
+	BufferManager &bufMgr = *BufferManager::getInst();
+	DeviceManager &devMgr = *DeviceManager::getInst();
 
 	/* 当IUPD和IACC标志之一被设置，才需要更新相应DiskInode
 	 * 目录搜索，不会设置所途径的目录文件的IACC和IUPD标志 */
@@ -535,13 +536,13 @@ void Inode::IUpdate(int time)
 		bufMgr.Bwrite(pBuf);
 	}
 }
-
+/*删此Inode对应的文件内容*/
 void Inode::ITrunc()
 {
 	/* 经由磁盘高速缓存读取存放一次间接、两次间接索引表的磁盘块 */
-	BufferManager &bm = Kernel::Instance().GetBufferManager();
+	BufferManager &bm = *BufferManager::getInst();
 	/* 获取g_FileSystem对象的引用，执行释放磁盘块的操作 */
-	FileSystem &filesys = Kernel::Instance().GetFileSystem();
+	FileSystem &filesys = *FileSystem::getInst();
 
 	/* 如果是字符设备或者块设备则退出 */
 	if (this->i_mode & (Inode::IFCHR & Inode::IFBLK))
@@ -620,54 +621,6 @@ void Inode::ITrunc()
 	this->i_nlink = 1;
 }
 
-void Inode::NFrele()
-{
-	/* 解锁pipe或Inode,并且唤醒相应进程 */
-	this->i_flag &= ~Inode::ILOCK;
-
-	if (this->i_flag & Inode::IWANT)
-	{
-		this->i_flag &= ~Inode::IWANT;
-		Kernel::Instance().GetProcessManager().WakeUpAll((unsigned long)this);
-	}
-}
-
-void Inode::NFlock()
-{
-	User &u = Kernel::Instance().GetUser();
-
-	while (this->i_flag & Inode::ILOCK)
-	{
-		this->i_flag |= Inode::IWANT;
-		u.u_procp->Sleep((unsigned long)this, ProcessManager::PRIBIO);
-	}
-	this->i_flag |= Inode::ILOCK;
-}
-
-void Inode::Prele()
-{
-	/* 解锁pipe或Inode,并且唤醒相应进程 */
-	this->i_flag &= ~Inode::ILOCK;
-
-	if (this->i_flag & Inode::IWANT)
-	{
-		this->i_flag &= ~Inode::IWANT;
-		Kernel::Instance().GetProcessManager().WakeUpAll((unsigned long)this);
-	}
-}
-
-void Inode::Plock()
-{
-	User &u = Kernel::Instance().GetUser();
-
-	while (this->i_flag & Inode::ILOCK)
-	{
-		this->i_flag |= Inode::IWANT;
-		u.u_procp->Sleep((unsigned long)this, ProcessManager::PPIPE);
-	}
-	this->i_flag |= Inode::ILOCK;
-}
-
 void Inode::Clean()
 {
 	/*
@@ -692,7 +645,7 @@ void Inode::Clean()
 		this->i_addr[i] = 0;
 	}
 }
-
+/*将已有缓存中的第i个Inode拷贝到内存*/
 void Inode::ICopy(Buf *bp, int inumber)
 {
 	DiskInode dInode;

@@ -81,6 +81,7 @@ public:
     static const int DATA_ZONE_END_SECTOR = 18000 - 1;                /* 数据区的结束扇区号 */
     static const int DATA_ZONE_SIZE = 18000 - DATA_ZONE_START_SECTOR; /* 数据区占据的扇区数量 */
 
+    static FileSystem inst;
     /* Functions */
 public:
     /* Constructors */
@@ -133,6 +134,8 @@ public:
      * @comment 查找文件系统装配表，搜索指定Inode对应的Mount装配块
      */
     Mount *GetMount(Inode *pInode);
+
+    static FileSystem *getInst() { return &inst; };
 
 private:
     /*

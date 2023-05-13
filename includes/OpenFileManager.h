@@ -36,11 +36,11 @@ public:
     /* Destructors */
     ~OpenFileTable();
 
-    // /*
-    // * @comment 根据用户系统调用提供的文件描述符参数fd，
-    // * 找到对应的打开文件控制块File结构
-    // */
-    // File* GetF(int fd);
+    /*
+     * @comment 根据用户系统调用提供的文件描述符参数fd，
+     * 找到对应的打开文件控制块File结构
+     */
+    File *GetF(int fd);
     /*
      * @comment 在系统打开文件表中分配一个空闲的File结构
      */
@@ -53,9 +53,8 @@ public:
 
     /* Members */
 public:
-    // File m_File[NFILE]; /* 系统打开文件表，为所有进程共享，进程打开文件描述符表
-    //                     中包含指向打开文件表中对应File结构的指针。*/
-    // 但进程不太需要
+    File m_File[NFILE]; /* 系统打开文件表，为所有进程共享，进程打开文件描述符表
+                        中包含指向打开文件表中对应File结构的指针。*/
 };
 
 /*

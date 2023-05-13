@@ -78,7 +78,7 @@ public:
 
     /* Members */
 private:
-    File OpenFileTable[NOFILES]; /* UNIX ：File对象的指针数组，指向系统打开文件表中的File对象 */
+    File *ProcessOpenFileTable[NOFILES]; /* UNIX ：File对象的指针数组，指向系统打开文件表中的File对象 */
     /*修改为OpenFileTable 因为单道程序下只有一个进程*/
 };
 

@@ -1,7 +1,7 @@
 
 #include "../includes/DeviceManager.h"
 
-#define PATH "E:\\courses\\OS\\FileManageSys\\myFileSys\\img"
+#define PATH "E:\\courses\\OS\\FileManageSys\\FileSysNew\\img"
 DeviceManager::DeviceManager()
 {
     nblkdev = 1;

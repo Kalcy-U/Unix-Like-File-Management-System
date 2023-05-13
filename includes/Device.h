@@ -25,6 +25,7 @@ class VirtualDist : public BlockDevice
 {
 public:
     int NSECTOR; /* ATA磁盘扇区数 */
+    static const int SECTOR_SIZE = 512;
     char devname[100];
     std::fstream fstr;
 
