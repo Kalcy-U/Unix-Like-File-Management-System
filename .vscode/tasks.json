@@ -10,7 +10,7 @@
                 "${workspaceFolder}\\*.cpp",
                 "${workspaceFolder}\\src\\*.cpp",
                 "-o",
-                "${fileDirname}\\${fileBasenameNoExtension}.exe"
+                "${workspaceFolder}\\fsys.exe"
             ],
             "options": {
                 "cwd": "d:\\MinGWw64-posix\\mingw64\\bin"
@@ -33,7 +33,7 @@
                 "-g",
                 "${file}",
                 "-o",
-                "${fileDirname}\\${fileBasenameNoExtension}.exe"
+                "${workspaceFolder}\\fsys.exe"
             ],
             "options": {
                 "cwd": "${fileDirname}"
