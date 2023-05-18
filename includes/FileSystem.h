@@ -94,6 +94,8 @@ public:
      */
     void Initialize();
 
+        void formatDisk(int dev);
+
     /*
      * @comment 系统初始化时读入SuperBlock
      */
@@ -103,7 +105,7 @@ public:
      * @comment 根据文件存储设备的设备号dev获取
      * 该文件系统的SuperBlock
      */
-    SuperBlock *GetFS(short dev);
+    SuperBlock *GetFS(int dev);
     /*
      * @comment 将SuperBlock对象的内存副本更新到
      * 存储设备的SuperBlock中去
@@ -114,21 +116,21 @@ public:
      * @comment  在存储设备dev上分配一个空闲
      * 外存INode，一般用于创建新的文件。
      */
-    Inode *IAlloc(short dev);
+    Inode *IAlloc(int dev);
     /*
      * @comment  释放存储设备dev上编号为number
      * 的外存INode，一般用于删除文件。
      */
-    void IFree(short dev, int number);
+    void IFree(int dev, int number);
 
     /*
      * @comment 在存储设备dev上分配空闲磁盘块
      */
-    Buf *Alloc(short dev);
+    Buf *Alloc(int dev);
     /*
      * @comment 释放存储设备dev上编号为blkno的磁盘块
      */
-    void Free(short dev, int blkno);
+    void Free(int dev, int blkno);
 
     /*
      * @comment 查找文件系统装配表，搜索指定Inode对应的Mount装配块
@@ -142,7 +144,7 @@ private:
      * @comment 检查设备dev上编号blkno的磁盘块是否属于
      * 数据盘块区
      */
-    bool BadBlock(SuperBlock *spb, short dev, int blkno);
+    bool BadBlock(SuperBlock *spb, int dev, int blkno);
 
     /* Members */
 public:

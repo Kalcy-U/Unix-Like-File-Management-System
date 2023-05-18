@@ -7,9 +7,9 @@
 
 #define TEST_BUFFER false
 #define TEST_FILE false
-#define TEST_SUPERBLOCK true
-#define INIT_SUPERBLOCK_EMPTY true
-#define TEST_FLUSH false
+#define TEST_SUPERBLOCK false
+#define INIT_SUPERBLOCK_EMPTY false
+#define TEST_FLUSH true
 DeviceManager DeviceManager::inst;
 BufferManager BufferManager::inst;
 FileSystem FileSystem::inst;
@@ -21,7 +21,8 @@ int main()
     DeviceManager &deviceManager = *(DeviceManager::getInst());
     BufferManager &bufferManager = *(BufferManager::getInst());
     FileManager &fileManager = *(FileManager::getInst());
-
+    FileSystem &fileSystem = *(FileSystem::getInst());
+    fileManager.Initialize();
     if (TEST_BUFFER)
     {
         bufferManager.showFreeList();
@@ -56,26 +57,16 @@ int main()
     {
         if (INIT_SUPERBLOCK_EMPTY)
         {
-            SuperBlock sb;
-            sb.s_isize = 200;                   /* 外存Inode区占用的盘块数 */
-            sb.s_fsize = 1024 * 1024 * 8 / 512; /* 盘块总数 */
-            sb.s_nfree = 100;                   /* 直接管理的空闲盘块数量 */
-            for (int i = 0; i < 100; i++)
-            {
-                sb.s_free[i] = 1024 + i;
-            }
-            sb.s_ninode = 100; /* 直接管理的空闲外存Inode数量 */
-            for (int i = 0; i < 100; i++)
-            {
-                sb.s_inode[i] = i;
-            }
-            sb.s_flock = 0;            /* 封锁空闲盘块索引表标志 */
-            sb.s_ilock = 0;            /* 封锁空闲Inode表标志 */
-            sb.s_fmod = 1;             /* 内存中super block副本被修改标志，意味着需要更新外存对应的Super Block */
-            sb.s_ronly = 0;            /* 本文件系统只能读出 */
-            sb.s_time = time(nullptr); /* 最近一次更新时间 */
-            fileManager.m_FileSystem->Update();
+            fileSystem.formatDisk(DEFALT_DEV);
         }
+        /*读取根设备的sb*/
+        fileSystem.LoadSuperBlock();
+        Buf *b0 = fileSystem.Alloc(DEFALT_DEV);
+        Inode *pI = fileSystem.IAlloc(DEFALT_DEV);
+
+        SuperBlock *sb1 = fileSystem.m_Mount[0].m_spb; // 断点调试查看内容
+        fileSystem.Update();
+        bufferManager.Bflush(DEFALT_DEV);
     }
     if (TEST_FILE)
     {

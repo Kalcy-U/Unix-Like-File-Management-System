@@ -2,7 +2,6 @@
 #include "../includes/DeviceManager.h"
 #include "../includes/User.h"
 #include "../includes/Utility.hpp"
-// #include "../includes/D"
 
 /*==============================class SuperBlock===================================*/
 /* 系统全局超级块SuperBlock对象 */
@@ -33,7 +32,7 @@ Mount::~Mount()
 	// 释放内存SuperBlock副本
 	if (this->m_spb != NULL)
 	{
-		delete this->m_spb;
+		// delete this->m_spb;
 		this->m_spb = NULL;
 	}
 }
@@ -42,6 +41,12 @@ Mount::~Mount()
 FileSystem::FileSystem()
 {
 	// nothing to do here
+	for (int i = 0; i < FileSystem::NMOUNT; i++)
+	{
+		this->m_Mount[i].m_spb = NULL;
+		this->m_Mount[i].m_dev = -1;
+		this->m_Mount[i].m_inodep = NULL;
+	}
 }
 
 FileSystem::~FileSystem()
@@ -51,9 +56,61 @@ FileSystem::~FileSystem()
 
 void FileSystem::Initialize()
 {
-	
+
 	this->m_BufferManager = BufferManager::getInst();
+
 	this->updlock = 0;
+}
+void FileSystem::formatDisk(int dev)
+{
+	SuperBlock sb;
+	this->m_Mount[0].m_dev = DeviceManager::ROOTDEV;
+	this->m_Mount[0].m_spb = &g_spb;
+
+	sb.s_isize = 200;					/* 外存Inode区占用的盘块数 */
+	sb.s_fsize = 1024 * 1024 * 8 / 512; /* 盘块总数 */
+	sb.s_nfree = 0;						/* 直接管理的空闲盘块数量 */
+	for (int i = 0; i < 100; i++)
+	{
+		sb.s_free[i] = 0;
+	}
+	sb.s_ninode = 0; /* 直接管理的空闲外存Inode数量 */
+	/*所有盘块加入s_free*/
+
+	for (int i = 0; i < 100; i++)
+	{
+		sb.s_inode[i] = 0;
+	}
+	sb.s_flock = 0;			   /* 封锁空闲盘块索引表标志 */
+	sb.s_ilock = 0;			   /* 封锁空闲Inode表标志 */
+	sb.s_fmod = 0;			   /* 内存中super block副本被修改标志，意味着需要更新外存对应的Super Block */
+	sb.s_ronly = 0;			   /* 本文件系统只能读出 */
+	sb.s_time = time(nullptr); /* 最近一次更新时间 */
+	for (int i = 0; i < sizeof(sb.padding) / sizeof(int); i++)
+	{
+		sb.padding[i] = 0;
+	}
+	for (int j = 0; j < 2; j++)
+	{
+		/* 第一次p指向SuperBlock的第0字节，第二次p指向第512字节 */
+		int *p = (int *)&sb + j * 128;
+
+		/* 将要写入到设备dev上的SUPER_BLOCK_SECTOR_NUMBER + j扇区中去 */
+		Buf *pBuf = m_BufferManager->GetBlk(dev, FileSystem::SUPER_BLOCK_SECTOR_NUMBER + j);
+
+		/* 将SuperBlock中第0 - 511字节写入缓存区 */
+		Utility::DWordCopy(p, (int *)pBuf->b_addr, 128);
+
+		/* 将缓冲区中的数据写到磁盘上 */
+		m_BufferManager->Bwrite(pBuf);
+	}
+	m_BufferManager->Bflush(dev);
+	LoadSuperBlock();
+	for (int i = sb.s_fsize - 1; i >= 1024; --i)
+	{
+		this->Free(dev, i);
+	}
+	Update();
 }
 
 void FileSystem::LoadSuperBlock()
@@ -83,7 +140,7 @@ void FileSystem::LoadSuperBlock()
 	g_spb.s_time = std::time(nullptr);
 }
 /*获取设备的Superblock*/
-SuperBlock *FileSystem::GetFS(short dev)
+SuperBlock *FileSystem::GetFS(int dev)
 {
 	SuperBlock *sb;
 
@@ -172,7 +229,7 @@ void FileSystem::Update()
 	this->m_BufferManager->Bflush(DeviceManager::NODEV);
 }
 /*从设备上分配一个空闲Inode*/
-Inode *FileSystem::IAlloc(short dev)
+Inode *FileSystem::IAlloc(int dev)
 {
 	SuperBlock *sb;
 	Buf *pBuf;
@@ -298,7 +355,7 @@ Inode *FileSystem::IAlloc(short dev)
 	return NULL; /* GCC likes it! */
 }
 /*释放设备上的number号Inode*/
-void FileSystem::IFree(short dev, int number)
+void FileSystem::IFree(int dev, int number)
 {
 	SuperBlock *sb;
 
@@ -328,7 +385,7 @@ void FileSystem::IFree(short dev, int number)
 	sb->s_fmod = 1;
 }
 /*从dev设备中分配一个空闲磁盘块，并读到Buf中*/
-Buf *FileSystem::Alloc(short dev)
+Buf *FileSystem::Alloc(int dev)
 {
 	int blkno; /* 分配到的空闲磁盘块编号 */
 	SuperBlock *sb;
@@ -409,7 +466,7 @@ Buf *FileSystem::Alloc(short dev)
 	return pBuf;
 }
 /*释放一个盘块*/
-void FileSystem::Free(short dev, int blkno)
+void FileSystem::Free(int dev, int blkno)
 {
 	SuperBlock *sb;
 	Buf *pBuf;
@@ -449,7 +506,7 @@ void FileSystem::Free(short dev, int blkno)
 	/* SuperBlock中直接管理空闲磁盘块号的栈已满 */
 	if (sb->s_nfree >= 100)
 	{
-		sb->s_flock++;
+		// sb->s_flock++;
 
 		/*
 		 * 使用当前Free()函数正要释放的磁盘块，存放前一组100个空闲
@@ -493,7 +550,7 @@ Mount *FileSystem::GetMount(Inode *pInode)
 	return NULL; /* 查找失败 */
 }
 
-bool FileSystem::BadBlock(SuperBlock *spb, short dev, int blkno)
+bool FileSystem::BadBlock(SuperBlock *spb, int dev, int blkno)
 {
 	return 0;
 }

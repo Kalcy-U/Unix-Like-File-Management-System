@@ -11,7 +11,7 @@ VirtualDist::VirtualDist(int _devId, int _NSECTOR, char const *name) : BlockDevi
     {
         strcpy(devname, name);
     }
-    // TODO:OPEN MODE
+    // TODO:OPEN_ MODE
     fstr.open(name, std::ios::binary | std::ios::in | std::ios::out);
     if (fstr.is_open())
     {

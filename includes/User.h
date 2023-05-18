@@ -19,10 +19,10 @@ public:
 
     enum ErrorCode
     {
-        NOERROR = 0, /* No error */
-        EPERM_ = 1,  /* Operation not permitted */
-        ENOENT_ = 2, /* No such file or directory */
-        ESRCH_ = 3,  /* No such process */
+        NOERROR_ = 0, /* No error */
+        EPERM_ = 1,   /* Operation not permitted */
+        ENOENT_ = 2,  /* No such file or directory */
+        ESRCH_ = 3,   /* No such process */
 
         ENXIO_ = 6, /* No such device or address */
 
@@ -54,21 +54,21 @@ public:
 
 public:
     /* 系统调用相关成员 */
-    // unsigned int *u_ar0; /* 指向核心栈现场保护区中EAX寄存器
+    unsigned int *u_ar0; /* 指向核心栈现场保护区中EAX寄存器
     //                      存放的栈单元，本字段存放该栈单元的地址。
     //                      在V6中r0存放系统调用的返回值给用户程序，
     //                      x86平台上使用EAX存放返回值，替代u.u_ar0[R0] */
 
-    // int u_arg[5]; /* 存放当前系统调用参数 */
-    // char *u_dirp; /* 系统调用参数(一般用于Pathname)的指针 */
+    int u_arg[5]; /* 存放当前系统调用参数 */
+    char *u_dirp; /* 系统调用参数(一般用于Pathname)的指针 */
 
     /* 文件系统相关成员 */
-    Inode *u_cdir;     /* 指向当前目录的Inode指针 */
-    Inode *u_pdir;     /* 指向父目录的Inode指针 */
-    ErrorCode u_error; /* 存放错误码 */
-    // DirectoryEntry u_dent;               /* 当前目录的目录项 */
-    // char u_dbuf[DirectoryEntry::DIRSIZ]; /* 当前路径分量 */
-    char u_curdir[128]; /* 当前工作目录完整路径 */
+    Inode *u_cdir;                       /* 指向当前目录的Inode指针 */
+    Inode *u_pdir;                       /* 指向父目录的Inode指针 */
+    ErrorCode u_error;                   /* 存放错误码 */
+    DirectoryEntry u_dent;               /* 当前目录的目录项 */
+    char u_dbuf[DirectoryEntry::DIRSIZ]; /* 当前路径分量 */
+    char u_curdir[128];                  /* 当前工作目录完整路径 */
 
     int u_segflg; /* 表明I/O针对用户或系统空间 */
 
@@ -81,6 +81,8 @@ public:
     /* 文件I/O操作 */
     IOParameter u_IOParam; /* 记录当前读、写文件的偏移量，用户目标区域和剩余字节数参数 */
 
+    /*debug*/
+    int Debug;
     /* Member Functions */
 public:
     /* 获取当前用户工作目录 */

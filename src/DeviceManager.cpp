@@ -29,7 +29,6 @@ int DeviceManager::GetNBlkDev()
 
 BlockDevice *DeviceManager::GetBlockDevice(int major)
 {
-    // TODO: 在此处插入 return 语句
     for (int i = 0; i < MAX_DEVICE_NUM; i++)
     {
         if (major == DevTable[i]->devId)

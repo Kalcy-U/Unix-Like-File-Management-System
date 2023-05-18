@@ -17,9 +17,9 @@ public:
     /* 目录搜索模式，用于NameI()函数 */
     enum DirectorySearchMode
     {
-        OPEN = 0,   /* 以打开文件方式搜索目录 */
-        CREATE = 1, /* 以新建文件方式搜索目录 */
-        DELETE = 2  /* 以删除文件方式搜索目录 */
+        OPEN_ = 0,  /* 以打开文件方式搜索目录 */
+        CREATE_ = 1, /* 以新建文件方式搜索目录 */
+        DELETE_ = 2 /* 以删除文件方式搜索目录 */
     };
     static FileManager inst;
     /* Functions */
@@ -94,21 +94,6 @@ public:
     void Rdwr(enum File::FileFlags mode);
 
     /*
-     * @comment Pipe()管道建立系统调用处理过程
-     */
-    void Pipe();
-
-    /*
-     * @comment 管道读操作
-     */
-    void ReadP(File *pFile);
-
-    /*
-     * @comment 管道写操作
-     */
-    void WriteP(File *pFile);
-
-    /*
      * @comment 目录搜索，将路径转化为相应的Inode，
      * 返回上锁后的Inode
      */
@@ -139,28 +124,11 @@ public:
      */
     int Access(Inode *pInode, unsigned int mode);
 
-    /*
-     * @comment 检查文件是否属于当前用户
-     */
-    Inode *Owner();
-
     /* 改变文件访问模式 */
     void ChMod();
 
-    /* 改变文件文件所有者user ID及其group ID */
-    void ChOwn();
-
     /* 改变当前工作目录 */
     void ChDir();
-
-    /* 创建文件的异名引用 */
-    void Link();
-
-    /* 取消文件 */
-    void UnLink();
-
-    /* 用于建立特殊设备文件的系统调用 */
-    void MkNod();
 
 public:
     /* 根目录内存Inode */
