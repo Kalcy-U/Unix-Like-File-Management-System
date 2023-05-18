@@ -8,7 +8,7 @@
             "name": "g++.exe - 生成和调试活动文件", // 该调试任务的名字，启动调试时会在待选列表中显示
             "type": "cppdbg",
             "request": "launch",
-            "program": "${fileDirname}\\${fileBasenameNoExtension}.exe",
+            "program": "${workspaceFolder}\\fsys.exe",
             "args": [],
             "stopAtEntry": false, // 这一项控制是否在入口处暂停，默认false不暂停，改为true暂停
             "cwd": "${workspaceFolder}",

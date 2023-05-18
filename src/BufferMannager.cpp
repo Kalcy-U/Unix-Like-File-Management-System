@@ -217,5 +217,16 @@ void BufferManager::ClrBuf(Buf *bp)
 }
 void BufferManager::Bflush(short dev)
 {
-    // TODO
+    // 通过测试
+    Buf *freeP = bFreeList.b_back;
+    while (freeP != nullptr)
+    {
+
+        if (freeP->b_flags & Buf::B_DELWRI)
+        {
+            this->Bwrite(freeP);
+        }
+        freeP = freeP->b_back;
+    }
+    return;
 }

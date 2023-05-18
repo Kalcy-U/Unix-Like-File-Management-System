@@ -2,7 +2,7 @@
 #define DEVICE_MANAGER_H
 
 #include "Device.h"
-
+#define DEFALT_DEV 0
 class DeviceManager
 {
     /* static const member */

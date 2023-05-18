@@ -3,7 +3,6 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-const int MANAGEMENT_SIZE = 512 * 128;
 
 VirtualDist::VirtualDist(int _devId, int _NSECTOR, char const *name) : BlockDevice(_devId)
 {
@@ -23,7 +22,8 @@ VirtualDist::VirtualDist(int _devId, int _NSECTOR, char const *name) : BlockDevi
 }
 int VirtualDist::bnoToMem(int bno)
 {
-    return MANAGEMENT_SIZE + bno * SECTOR_SIZE;
+    // return MANAGEMENT_SIZE + bno * SECTOR_SIZE;
+    return bno * SECTOR_SIZE;
 }
 int VirtualDist::Read(Buf *bp)
 {

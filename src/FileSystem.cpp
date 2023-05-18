@@ -51,6 +51,7 @@ FileSystem::~FileSystem()
 
 void FileSystem::Initialize()
 {
+	
 	this->m_BufferManager = BufferManager::getInst();
 	this->updlock = 0;
 }

@@ -1,28 +1,28 @@
-// #include "../includes/FileManager.h"
-// #include "../includes/Utility.hpp"
-// #include "../includes/User.h"
-// #include "../includes/FileSystem.h"
+#include "../includes/FileManager.h"
+#include "../includes/Utility.hpp"
+#include "../includes/User.h"
+#include "../includes/FileSystem.h"
 
-// /*==========================class FileManager===============================*/
-// FileManager::FileManager()
-// {
-// 	// nothing to do here
-// }
+/*==========================class FileManager===============================*/
+FileManager::FileManager()
+{
+    // nothing to do here
+}
 
-// FileManager::~FileManager()
-// {
-// 	// nothing to do here
-// }
+FileManager::~FileManager()
+{
+    // nothing to do here
+}
 
-// void FileManager::Initialize()
-// {
-// 	this->m_FileSystem = &Kernel::Instance().GetFileSystem();
+void FileManager::Initialize()
+{
+    this->m_FileSystem = FileSystem::getInst();
 
-// 	this->m_InodeTable = &g_InodeTable;
-// 	this->m_OpenFileTable = &g_OpenFileTable;
+    this->m_InodeTable = &g_InodeTable;
+    this->m_OpenFileTable = &g_OpenFileTable;
 
-// 	this->m_InodeTable->Initialize();
-// }
+    this->m_InodeTable->Initialize();
+}
 
 // /*
 //  * 功能：打开文件
