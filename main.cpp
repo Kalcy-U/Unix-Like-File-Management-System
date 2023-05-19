@@ -4,13 +4,15 @@
 #include "./includes/FileSystem.h"
 #include "./includes/Utility.hpp"
 #include <cstring>
+#include <fstream>
 
 #define TEST_BUFFER 0
 #define TEST_FLUSH 0
 #define FORMAT_DISK 0
 #define TEST_CREATE 0
 #define TEST_WRITE 0
-#define TEST_READ 1
+#define TEST_READ 0
+#define TEST_CRW 1 // 读写综合测试
 // 静态对象实例化
 //  涉及到析构时资源有序释放，因此实例化的顺序不能改
 DeviceManager DeviceManager::inst;
@@ -109,19 +111,7 @@ int main()
         Utility::DWordCopy((int *)buffer, (int *)etr, 32 * 3);
         printf("entry0 ino=%d,name=%s\n", etr[0].m_ino, etr[0].m_name);
     }
-    if (TEST_WRITE)
-    {
-        fileSystem.LoadSuperBlock();
-        int fd = fileManager.Open("/home/texts/Jerry.txt", File::FWRITE | File::FREAD);
-        if (fd >= 0)
-        {
-            char str[200] = "0123456789012345678901234567890123456789";
-            int count = fileManager.Write(fd, (unsigned char *)str, 30);
-            Inode *pInode = user.u_ofiles.GetF(fd)->f_inode;
-            printf("inode.number=%d,isize=%d\n", pInode->i_number, pInode->i_size);
-            fileManager.Close(fd);
-        }
-    }
+
     if (TEST_WRITE)
     {
         fileSystem.LoadSuperBlock();
@@ -132,13 +122,66 @@ int main()
             int count = fileManager.Write(fd, (unsigned char *)str, 30);
             File *pFile = user.u_ofiles.GetF(fd);
             Inode *pInode = pFile->f_inode;
-            printf("inode.number=%d,isize=%d,tellp=%d\n", pInode->i_number, pInode->i_size, fileManager.Tellp(fd));
+            printf("write:count=%d,inode.number=%d,isize=%d,tellp=%d\n", count, pInode->i_number, pInode->i_size, fileManager.Tellp(fd));
+            fileManager.Close(fd);
+        }
+        printf("将一张图片放在home/photos文件夹下\n");
+        fd = fileManager.Creat("/home/photos/testimage.jpg", Inode::IRWXU);
+
+        if (fd >= 0)
+        {
+
+            static char str[17 * 1024] = {0};
+            std::ifstream ufile("img/testimage.jpg", std::ios::in | std::ios::binary);
+            ufile.read(str, 17 * 1024);
+            int imgsize = ufile.gcount();
+            int count = fileManager.Write(fd, (unsigned char *)str, imgsize);
+            File *pFile = user.u_ofiles.GetF(fd);
+            Inode *pInode = pFile->f_inode;
+            printf("read:count=%d,inode.number=%d,isize=%d,tellp=%d\n", count, pInode->i_number, pInode->i_size, fileManager.Tellp(fd));
             fileManager.Close(fd);
         }
     }
     if (TEST_READ)
     {
         fileSystem.LoadSuperBlock();
+        int fd = fileManager.Open("/home/texts/LL.txt", File::FWRITE | File::FREAD);
+        if (fd >= 0)
+        {
+            char str[200] = {0};
+            int count = fileManager.Read(fd, (unsigned char *)str, 50);
+            File *pFile = user.u_ofiles.GetF(fd);
+            Inode *pInode = pFile->f_inode;
+            printf("read:count=%d,inode.number=%d,isize=%d,tellp=%d\n", count, pInode->i_number, pInode->i_size, fileManager.Tellp(fd));
+            fileManager.Close(fd);
+        }
+    }
+    if (TEST_CRW)
+    {
+        fileSystem.LoadSuperBlock();
+
+        printf("新建文件/test/Jerry，打开该文件，任意写入800个字节\n");
+        int fd = fileManager.Creat("/home/texts/Jerry.txt", Inode::IRWXU);
+        if (fd >= 0)
+        {
+            char str[801] = {0};
+            std::ifstream ufile("img/file_with_800B.txt", std::ios::in | std::ios::binary);
+            ufile.read(str, 800);
+            int fsize = ufile.gcount();
+            int count = fileManager.Write(fd, (unsigned char *)str, 800);
+            File *pFile = user.u_ofiles.GetF(fd);
+            Inode *pInode = pFile->f_inode;
+            printf("read:count=%d,inode.number=%d,isize=%d,tellp=%d\n", count, pInode->i_number, pInode->i_size, fileManager.Tellp(fd));
+            printf("将文件读写指针定位到第500字节，读出500个字节到字符串abc。\n");
+            char abc[501] = {0};
+            fileManager.Seek(fd, 500, 0);
+            count = fileManager.Read(fd, (unsigned char *)abc, 500);
+            printf("read:count=%d,inode.number=%d,isize=%d,tellp=%d\n", count, pInode->i_number, pInode->i_size, fileManager.Tellp(fd));
+            printf("将abc写回文件。\n");
+            count = fileManager.Write(fd, (unsigned char *)abc, 500);
+            printf("read:count=%d,inode.number=%d,isize=%d,tellp=%d\n", count, pInode->i_number, pInode->i_size, fileManager.Tellp(fd));
+            fileManager.Close(fd);
+        }
     }
     return 0;
 }

@@ -2,6 +2,7 @@
 #include "../includes/BufferManager.h"
 #include "../includes/DeviceManager.h"
 #include "../includes/precompile.h"
+#include "../includes/Utility.hpp"
 #include <iomanip>
 #include <string.h>
 #include <thread>
@@ -60,7 +61,7 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
     Buf *buf_reuse = nullptr;
     if (blkno < 0)
     {
-        printf("zzz\n");
+        Utility::DebugInfo("blk值无效\n");
     }
 
     for (int i = 0; i < NBUF; i++)
@@ -133,7 +134,7 @@ void BufferManager::Brelse(Buf *bp)
         freeP->b_back = bp;
         bp->b_forw = freeP;
         bp->b_back = nullptr;
-        std::cout << "buffer " << bp->b_no << " is released." << std::endl;
+        // std::cout << "buffer " << bp->b_no << " is released." << std::endl;
     }
 }
 /// @brief 读一个块，包含请求块、同步读、加done标，不含块释放

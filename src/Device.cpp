@@ -5,13 +5,13 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-void VirtualDist::quit()
+void VirtualDisk::quit()
 {
     if (fstr.is_open())
         fstr.close();
-    printf("VirtualDist::~VirtualDist : close dist %s\n", fstr.fail() ? "failed" : "succeed");
+    Utility::DebugInfo("VirtualDisk::~VirtualDisk : close dist %s\n", fstr.fail() ? "failed" : "succeed");
 }
-void VirtualDist::reuse()
+void VirtualDisk::reuse()
 {
     if (!fstr.is_open())
     {
@@ -28,7 +28,7 @@ void VirtualDist::reuse()
         std::cout << "disk is open." << std::endl;
 }
 
-VirtualDist::VirtualDist(int _devId, int _NSECTOR, char const *name) : BlockDevice(_devId)
+VirtualDisk::VirtualDisk(int _devId, int _NSECTOR, char const *name) : BlockDevice(_devId)
 {
     NSECTOR = _NSECTOR;
     if (name != nullptr && strlen(name) != 0)
@@ -44,12 +44,12 @@ VirtualDist::VirtualDist(int _devId, int _NSECTOR, char const *name) : BlockDevi
     }
     std::cout << "disk activate failed." << std::endl;
 }
-int VirtualDist::bnoToMem(int bno)
+int VirtualDisk::bnoToMem(int bno)
 {
     // return MANAGEMENT_SIZE + bno * SECTOR_SIZE;
     return bno * SECTOR_SIZE;
 }
-int VirtualDist::Read(Buf *bp)
+int VirtualDisk::Read(Buf *bp)
 {
 
     int bnum = bp->b_blkno;
@@ -59,23 +59,22 @@ int VirtualDist::Read(Buf *bp)
 
     // fstr.getline((char *)bp->b_addr, SECTOR_SIZE, '\0');
     fstr.read((char *)bp->b_addr, SECTOR_SIZE);
-    printf("buffer read no=%d,pos=mno=%d count=%d\n", bp->b_blkno, mno, fstr.gcount());
+    Utility::DebugInfo("VirtualDisk::Read : blk=%d,pos=mno=%d count=%d\n", bp->b_blkno, mno, fstr.gcount());
     return 0;
 }
-void VirtualDist::Write(Buf *bp)
+void VirtualDisk::Write(Buf *bp)
 {
     int bnum = bp->b_blkno;
     int mno = bnoToMem(bnum);
     fstr.seekp(mno, std::ios::beg);
-    printf("VirtualDist::Write : pos=mno=%d %s\n", mno, fstr.fail() ? "fail" : "succeed");
+    Utility::DebugInfo("VirtualDisk::Write : blk=%d,pos=mno=%d %s\n", bp->b_blkno, mno, fstr.fail() ? "fail" : "succeed");
     fstr.write((char *)bp->b_addr, SECTOR_SIZE);
-    printf("VirtualDist::Write : %s tellp=%d,count=%d\n", fstr.fail() ? "fail" : "succeed", int(fstr.tellp()), int(fstr.tellp()) - mno);
 }
-VirtualDist::~VirtualDist()
+VirtualDisk::~VirtualDisk()
 {
     // debug:析构前需要将延迟写的缓存写入磁盘
     BufferManager::getInst()->Bflush(devId);
     if (fstr.is_open())
         fstr.close();
-    printf("VirtualDist::~VirtualDist : close dist %s\n", fstr.fail() ? "failed" : "succeed");
+    Utility::DebugInfo("VirtualDisk::~VirtualDisk : close dist %s\n", fstr.fail() ? "failed" : "succeed");
 }

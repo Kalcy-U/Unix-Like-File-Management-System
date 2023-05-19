@@ -65,7 +65,7 @@ void FileSystem::formatDisk(int dev)
 {
 	DeviceManager &dv = *DeviceManager::getInst();
 	// 系统调用后输出流会出错，好神秘啊
-	//  VirtualDist *disk = dynamic_cast<VirtualDist *>(dv.GetBlockDevice(DEFALT_DEV));
+	//  VirtualDisk *disk = dynamic_cast<VirtualDisk *>(dv.GetBlockDevice(DEFALT_DEV));
 	//  disk->quit();
 	//  system("cd img & del disk.img & fsutil file createnew disk.img 8388608");
 

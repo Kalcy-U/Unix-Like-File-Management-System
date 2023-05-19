@@ -4,7 +4,7 @@
 #include <fstream>
 #include <iostream>
 class BlockDevice;
-class VirtualDist;
+class VirtualDisk;
 
 class BlockDevice
 {
@@ -21,7 +21,7 @@ public:
 };
 
 // 将.img大文件视为虚拟块设备
-class VirtualDist : public BlockDevice
+class VirtualDisk : public BlockDevice
 {
 public:
     int NSECTOR; /* ATA磁盘扇区数 */
@@ -31,8 +31,8 @@ public:
     std::fstream fstr;
 
 public:
-    VirtualDist(int _devId, int _NSECTOR, char const *name);
-    virtual ~VirtualDist();
+    VirtualDisk(int _devId, int _NSECTOR, char const *name);
+    virtual ~VirtualDisk();
     int bnoToMem(int bno);
     virtual int Read(Buf *bp);
     virtual void Write(Buf *bp);
