@@ -36,6 +36,8 @@ public:
     int bnoToMem(int bno);
     virtual int Read(Buf *bp);
     virtual void Write(Buf *bp);
+    virtual void quit();
+    virtual void reuse();
 };
 
 #endif

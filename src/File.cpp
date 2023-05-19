@@ -37,6 +37,8 @@ int OpenFiles::AllocFreeSlot()
 	{
 		if (this->ProcessOpenFileTable[i] == NULL)
 		{
+			/*一定要加！不然外层函数无法返回fd*/
+			u.u_ar0[User::EAX] = i;
 			return i;
 		}
 	}

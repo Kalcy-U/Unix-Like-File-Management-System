@@ -2,7 +2,7 @@
 #include "../includes/Utility.hpp"
 #include "../includes/User.h"
 #include "../includes/FileSystem.h"
-#include "../includes/precompile.h"
+#include "../includes/DeviceManager.h"
 /*==========================class FileManager===============================*/
 FileManager::FileManager()
 {
@@ -12,6 +12,8 @@ FileManager::FileManager()
 FileManager::~FileManager()
 {
     // nothing to do here
+    // debug 析构时同步所有
+    m_FileSystem->Update();
 }
 
 void FileManager::Initialize()
@@ -23,35 +25,66 @@ void FileManager::Initialize()
 
     this->m_InodeTable->Initialize();
     this->m_FileSystem->Initialize();
+    /*设置根目录*/
 }
 
 /*
  * 功能：打开文件
  * 效果：建立打开文件结构，内存i节点开锁 、i_count 为正数（i_count ++）
  * */
-void FileManager::Open()
+int FileManager::Open(const char *path, int mode)
 {
     Inode *pInode;
     User &u = *User::getInst();
-
+    u.u_dirp = path;
     pInode = this->NameI(NextChar, FileManager::OPEN_); /* 0 = Open, not create */
     /* 没有找到相应的Inode */
     if (NULL == pInode)
     {
-        return;
+        return -1;
     }
-    this->Open1(pInode, u.u_arg[1], 0);
+    this->Open1(pInode, mode, 0);
+    return u.u_ar0[User::EAX];
 }
-
-/*
- * 功能：创建一个新的文件
- * 效果：建立打开文件结构，内存i节点开锁 、i_count 为正数（应该是 1）
- * */
-void FileManager::Creat()
+int FileManager::MkNod(const char *path, int mode)
 {
     Inode *pInode;
     User &u = *User::getInst();
-    unsigned int newACCMode = u.u_arg[1] & (Inode::IRWXU | Inode::IRWXG | Inode::IRWXO);
+    u.u_dirp = path;
+    int number = -1;
+    /* 检查uid是否是root，该系统调用只有uid==root时才可被调用 */
+
+    pInode = this->NameI(FileManager::NextChar, FileManager::CREATE_);
+    /* 要创建的文件已经存在,这里并不能去覆盖此文件 */
+    if (pInode != NULL)
+    {
+        // u.u_error = User::EEXIST_;
+        number = pInode->i_number;
+        this->m_InodeTable->IPut(pInode);
+        return number;
+    }
+
+    pInode = this->MakNode(mode);
+    if (NULL == pInode)
+    {
+        return -1;
+    }
+
+    number = pInode->i_number;
+    this->m_InodeTable->IPut(pInode);
+    return number;
+}
+/*
+ * 功能：创建一个新的文件(或文件夹)
+ * 效果：建立打开文件结构，内存i节点开锁 、i_count 为正数（应该是 1）
+ * 返回：fd
+ * */
+int FileManager::Creat(const char *path, int mode)
+{
+    Inode *pInode;
+    User &u = *User::getInst();
+    u.u_dirp = path;
+    unsigned int newACCMode = mode;
 
     /* 搜索目录的模式为1，表示创建；若父目录不可写，出错返回 */
     pInode = this->NameI(NextChar, FileManager::CREATE_);
@@ -59,13 +92,13 @@ void FileManager::Creat()
     if (NULL == pInode)
     {
         if (u.u_error)
-            return;
+            return -1;
         /* 创建Inode */
-        pInode = this->MakNode(newACCMode & (~Inode::ISVTX));
+        pInode = this->MakNode(newACCMode);
         /* 创建失败 */
         if (NULL == pInode)
         {
-            return;
+            return -1;
         }
 
         /*
@@ -77,14 +110,18 @@ void FileManager::Creat()
     }
     else
     {
-        /* 如果NameI()搜索到已经存在要创建的文件，则清空该文件（用算法ITrunc()）。UID没有改变
-         * 原来UNIX的设计是这样：文件看上去就像新建的文件一样。然而，新文件所有者和许可权方式没变。
-         * 也就是说creat指定的RWX比特无效。
-         * 邓蓉认为这是不合理的，应该改变。
-         * 现在的实现：creat指定的RWX比特有效 */
-        this->Open1(pInode, File::FWRITE, 1);
-        pInode->i_mode |= newACCMode;
+        // if (mode & Inode::IFDIR)
+        // {
+        //     printf("directory%s exits\n", path);
+        //     this->Open1(pInode, File::FWRITE, 0);
+        // }
+        // else
+        {
+            this->Open1(pInode, File::FWRITE, 1);
+            pInode->i_mode |= newACCMode;
+        }
     }
+    return u.u_ar0[User::EAX];
 }
 
 /*
@@ -113,11 +150,6 @@ void FileManager::Open1(Inode *pInode, int mode, int trf)
         {
             /* 检查写权限 */
             this->Access(pInode, Inode::IWRITE);
-            /* 系统调用去写目录文件是不允许的 */
-            if ((pInode->i_mode & Inode::IFMT) == Inode::IFDIR)
-            {
-                u.u_error = User::EISDIR_;
-            }
         }
     }
 
@@ -166,10 +198,9 @@ void FileManager::Open1(Inode *pInode, int mode, int trf)
     }
 }
 
-void FileManager::Close()
+void FileManager::Close(int fd)
 {
     User &u = *User::getInst();
-    int fd = u.u_arg[0];
 
     /* 获取打开文件控制块File结构 */
     File *pFile = u.u_ofiles.GetF(fd);
@@ -183,11 +214,22 @@ void FileManager::Close()
     this->m_OpenFileTable->CloseF(pFile);
 }
 
-void FileManager::Seek()
+int FileManager::Tellp(int fd)
 {
     File *pFile;
     User &u = *User::getInst();
-    int fd = u.u_arg[0];
+
+    pFile = u.u_ofiles.GetF(fd);
+    if (NULL == pFile)
+    {
+        return -1; /* 若FILE不存在，GetF有设出错码 */
+    }
+    return pFile->f_offset;
+}
+void FileManager::Seek(int fd, int offset, int mode)
+{
+    File *pFile;
+    User &u = *User::getInst();
 
     pFile = u.u_ofiles.GetF(fd);
     if (NULL == pFile)
@@ -195,23 +237,7 @@ void FileManager::Seek()
         return; /* 若FILE不存在，GetF有设出错码 */
     }
 
-    /* 管道文件不允许seek */
-    if (pFile->f_flag & File::FPIPE)
-    {
-        u.u_error = User::ESPIPE_;
-        return;
-    }
-
-    int offset = u.u_arg[1];
-
-    /* 如果u.u_arg[2]在3 ~ 5之间，那么长度单位由字节变为512字节 */
-    if (u.u_arg[2] > 2)
-    {
-        offset = offset << 9;
-        u.u_arg[2] -= 3;
-    }
-
-    switch (u.u_arg[2])
+    switch (mode)
     {
     /* 读写位置设置为offset */
     case 0:
@@ -228,11 +254,10 @@ void FileManager::Seek()
     }
 }
 
-void FileManager::Dup()
+void FileManager::Dup(int fd)
 {
     File *pFile;
     User &u = *User::getInst();
-    int fd = u.u_arg[0];
 
     pFile = u.u_ofiles.GetF(fd);
     if (NULL == pFile)
@@ -250,87 +275,81 @@ void FileManager::Dup()
     pFile->f_count++;
 }
 
-void FileManager::FStat()
-{
-    File *pFile;
-    User &u = *User::getInst();
-    int fd = u.u_arg[0];
+// void FileManager::FStat(int fd)
+// {
+//     File *pFile;
+//     User &u = *User::getInst();
 
-    pFile = u.u_ofiles.GetF(fd);
-    if (NULL == pFile)
-    {
-        return;
-    }
+//     pFile = u.u_ofiles.GetF(fd);
+//     if (NULL == pFile)
+//     {
+//         return;
+//     }
 
-    /* u.u_arg[1] = pStatBuf */
-    this->Stat1(pFile->f_inode, u.u_arg[1]);
-}
+//     /* u.u_arg[1] = pStatBuf */
+//     this->Stat1(pFile->f_inode, u.u_arg[1]);
+// }
 
-void FileManager::Stat()
-{
-    Inode *pInode;
-    User &u = *User::getInst();
+// void FileManager::Stat(int fd)
+// {
+//     Inode *pInode;
+//     User &u = *User::getInst();
 
-    pInode = this->NameI(FileManager::NextChar, FileManager::OPEN_);
-    if (NULL == pInode)
-    {
-        return;
-    }
-    this->Stat1(pInode, u.u_arg[1]);
-    this->m_InodeTable->IPut(pInode);
-}
+//     pInode = this->NameI(FileManager::NextChar, FileManager::OPEN_);
+//     if (NULL == pInode)
+//     {
+//         return;
+//     }
+//     this->Stat1(pInode, u.u_arg[1]);
+//     this->m_InodeTable->IPut(pInode);
+// }
 
-void FileManager::Stat1(Inode *pInode, unsigned long statBuf)
-{
-    Buf *pBuf;
-    BufferManager &bufMgr = *BufferManager::getInst();
+// void FileManager::Stat1(Inode *pInode, unsigned long statBuf)
+// {
+//     Buf *pBuf;
+//     BufferManager &bufMgr = *BufferManager::getInst();
 
-    pInode->IUpdate(time(nullptr));
-    pBuf = bufMgr.Bread(pInode->i_dev, FileSystem::INODE_ZONE_START_SECTOR + pInode->i_number / FileSystem::INODE_NUMBER_PER_SECTOR);
+//     pInode->IUpdate(time(nullptr));
+//     pBuf = bufMgr.Bread(pInode->i_dev, FileSystem::INODE_ZONE_START_SECTOR + pInode->i_number / FileSystem::INODE_NUMBER_PER_SECTOR);
 
-    /* 将p指向缓存区中编号为inumber外存Inode的偏移位置 */
-    unsigned char *p = pBuf->b_addr + (pInode->i_number % FileSystem::INODE_NUMBER_PER_SECTOR) * sizeof(DiskInode);
-    Utility::DWordCopy((int *)p, (int *)statBuf, sizeof(DiskInode) / sizeof(int));
+//     /* 将p指向缓存区中编号为inumber外存Inode的偏移位置 */
+//     unsigned char *p = pBuf->b_addr + (pInode->i_number % FileSystem::INODE_NUMBER_PER_SECTOR) * sizeof(DiskInode);
+//     Utility::DWordCopy((int *)p, (int *)statBuf, sizeof(DiskInode) / sizeof(int));
 
-    bufMgr.Brelse(pBuf);
-}
+//     bufMgr.Brelse(pBuf);
+// }
 
-void FileManager::Read()
-{
-    /* 直接调用Rdwr()函数即可 */
-    this->Rdwr(File::FREAD);
-}
-
-void FileManager::Write()
+int FileManager::Read(int fd, unsigned char *buffer, int count)
 {
     /* 直接调用Rdwr()函数即可 */
-    this->Rdwr(File::FWRITE);
+    return this->Rdwr(File::FREAD, fd, buffer, count);
 }
 
-void FileManager::Rdwr(enum File::FileFlags mode)
+int FileManager::Write(int fd, unsigned char *buffer, int count)
+{
+    /* 直接调用Rdwr()函数即可 */
+    return this->Rdwr(File::FWRITE, fd, buffer, count);
+}
+
+int FileManager::Rdwr(enum File::FileFlags mode, int fd, unsigned char *buffer, int count)
 {
     File *pFile;
     User &u = *User::getInst();
 
     /* 根据Read()/Write()的系统调用参数fd获取打开文件控制块结构 */
-    pFile = u.u_ofiles.GetF(u.u_arg[0]); /* fd */
+    pFile = u.u_ofiles.GetF(fd); /* fd */
     if (NULL == pFile)
     {
         /* 不存在该打开文件，GetF已经设置过出错码，所以这里不需要再设置了 */
         /*	u.u_error = User::EBADF_;	*/
-        return;
+        return -1;
     }
 
-    /* 读写的模式不正确 */
-    if ((pFile->f_flag & mode) == 0)
-    {
-        u.u_error = User::EACCES_;
-        return;
-    }
+    /* 读写的模式检查 删了*/
 
-    u.u_IOParam.m_Base = (unsigned char *)u.u_arg[1]; /* 目标缓冲区首址 */
-    u.u_IOParam.m_Count = u.u_arg[2];                 /* 要求读/写的字节数 */
-    u.u_segflg = 0;                                   /* User Space I/O，读入的内容要送数据段或用户栈段 */
+    u.u_IOParam.m_Base = buffer; /* 目标缓冲区首址 */
+    u.u_IOParam.m_Count = count; /* 要求读/写的字节数 */
+    u.u_segflg = 0;              /* User Space I/O，读入的内容要送数据段或用户栈段 */
 
     /* 设置文件起始读位置 */
     u.u_IOParam.m_Offset = pFile->f_offset;
@@ -344,10 +363,10 @@ void FileManager::Rdwr(enum File::FileFlags mode)
     }
 
     /* 根据读写字数，移动文件读写偏移指针 */
-    pFile->f_offset += (u.u_arg[2] - u.u_IOParam.m_Count);
+    pFile->f_offset += (count - u.u_IOParam.m_Count);
 
     /* 返回实际读写的字节数，修改存放系统调用返回值的核心栈单元 */
-    u.u_ar0[User::EAX] = u.u_arg[2] - u.u_IOParam.m_Count;
+    return count - u.u_IOParam.m_Count;
 }
 
 /* 返回NULL表示目录搜索失败，否则是根指针，指向文件的内存打开i节点 ，上锁的内存i节点  */
@@ -382,18 +401,13 @@ Inode *FileManager::NameI(char (*func)(), enum DirectorySearchMode mode)
     /* 如果试图更改和删除当前目录文件则出错 */
     if ('\0' == curchar && mode != FileManager::OPEN_)
     {
-        u.u_error = User::ENOENT_;
+
         goto out;
     }
 
     /* 外层循环每次处理pathname中一段路径分量 */
     while (true)
     {
-        /* 如果出错则释放当前搜索到的目录文件Inode，并退出 */
-        if (u.u_error != User::NOERROR_)
-        {
-            break; /* goto out; */
-        }
 
         /* 整个路径搜索完毕，返回相应Inode指针。目录搜索成功返回。 */
         if ('\0' == curchar)
@@ -402,7 +416,7 @@ Inode *FileManager::NameI(char (*func)(), enum DirectorySearchMode mode)
         }
 
         /* 如果要进行搜索的不是目录文件，释放相关Inode资源则退出 */
-        if ((pInode->i_mode & Inode::IFMT) != Inode::IFDIR)
+        if (!(pInode->i_mode & Inode::IFDIR))
         {
             u.u_error = User::ENOTDIR_;
             break; /* goto out; */
@@ -411,7 +425,7 @@ Inode *FileManager::NameI(char (*func)(), enum DirectorySearchMode mode)
         /* 进行目录搜索权限检查,IEXEC在目录文件中表示搜索权限 */
         if (this->Access(pInode, Inode::IEXEC))
         {
-            u.u_error = User::EACCES_;
+
             break; /* 不具备目录搜索权限，goto out; */
         }
 
@@ -420,7 +434,7 @@ Inode *FileManager::NameI(char (*func)(), enum DirectorySearchMode mode)
          * 便于和目录项进行比较。
          */
         pChar = &(u.u_dbuf[0]);
-        while ('/' != curchar && '\0' != curchar && u.u_error == User::NOERROR_)
+        while ('/' != curchar && '\0' != curchar)
         {
             if (pChar < &(u.u_dbuf[DirectoryEntry::DIRSIZ]))
             {
@@ -440,11 +454,6 @@ Inode *FileManager::NameI(char (*func)(), enum DirectorySearchMode mode)
         while ('/' == curchar)
         {
             curchar = (*func)();
-        }
-
-        if (u.u_error != User::NOERROR_)
-        {
-            break; /* goto out; */
         }
 
         /* 内层循环部分对于u.u_dbuf[]中的路径名分量，逐个搜寻匹配的目录项 */
@@ -469,7 +478,6 @@ Inode *FileManager::NameI(char (*func)(), enum DirectorySearchMode mode)
                     /* 判断该目录是否可写 */
                     if (this->Access(pInode, Inode::IWRITE))
                     {
-                        u.u_error = User::EACCES_;
                         goto out; /* Failed */
                     }
 
@@ -586,6 +594,199 @@ out:
     return NULL;
 }
 
+Inode *FileManager::NameI(std::string name, enum DirectorySearchMode mode)
+{
+    Inode *pInode;
+    Buf *pBuf;
+    char curchar;
+    char *pChar;
+    int freeEntryOffset; /* 以创建文件模式搜索目录时，记录空闲目录项的偏移量 */
+    User &u = *User::getInst();
+    BufferManager &bufMgr = *BufferManager::getInst();
+    std::vector<std::string> dirlist;
+    /*
+     * 如果该路径是'/'开头的，从根目录开始搜索，
+     * 否则从进程当前工作目录开始搜索。
+     */
+    pInode = u.u_cdir;
+    if ('/' == name[0])
+    {
+        pInode = this->rootDirInode;
+    }
+
+    /* 检查该Inode是否正在被使用，以及保证在整个目录搜索过程中该Inode不被释放 */
+    this->m_InodeTable->IGet(pInode->i_dev, pInode->i_number);
+    if (!(pInode->i_mode & Inode::IFDIR))
+    {
+        u.u_error = User::ENOTDIR_;
+        goto out; /* goto out; */
+    }
+    dirlist = Utility::Split(name, '/');
+
+    for (int i = 0; i < dirlist.size() - 2; i++)
+    {
+        if (u.u_error != User::NOERROR_)
+            break;
+
+        if (dirlist[i].size() > DirectoryEntry::DIRSIZ - 1)
+            break;
+        char *dst = u.u_dbuf, *p = dst;
+        const char *src = dirlist[i].c_str();
+        while ((*dst++ = *src++) != 0)
+            ;
+        while (dst < &(u.u_dbuf[DirectoryEntry::DIRSIZ]))
+            *dst++ = '\0';
+        /* 内层循环部分对于u.u_dbuf[]中的路径名分量，逐个搜寻匹配的目录项 */
+        u.u_IOParam.m_Offset = 0;
+        /* 设置为目录项个数 ，含空白的目录项*/
+        u.u_IOParam.m_Count = pInode->i_size / (DirectoryEntry::DIRSIZ + 4);
+        freeEntryOffset = 0;
+        pBuf = NULL;
+    }
+    /* 外层循环每次处理pathname中一段路径分量 */
+    while (true)
+    {
+        /* 如果出错则释放当前搜索到的目录文件Inode，并退出 */
+
+        /* 整个路径搜索完毕，返回相应Inode指针。目录搜索成功返回。 */
+        if ('\0' == curchar)
+        {
+            return pInode;
+        }
+
+        /* 内层循环部分对于u.u_dbuf[]中的路径名分量，逐个搜寻匹配的目录项 */
+        u.u_IOParam.m_Offset = 0;
+        /* 设置为目录项个数 ，含空白的目录项*/
+        u.u_IOParam.m_Count = pInode->i_size / (DirectoryEntry::DIRSIZ + 4);
+        freeEntryOffset = 0;
+        pBuf = NULL;
+
+        while (true)
+        {
+            /* 对目录项已经搜索完毕 */
+            if (0 == u.u_IOParam.m_Count)
+            {
+                if (NULL != pBuf)
+                {
+                    bufMgr.Brelse(pBuf);
+                }
+                /* 如果是创建新文件 */
+                if (FileManager::CREATE_ == mode && curchar == '\0')
+                {
+                    /* 判断该目录是否可写 */
+                    if (this->Access(pInode, Inode::IWRITE))
+                    {
+                        u.u_error = User::EACCES_;
+                        goto out; /* Failed */
+                    }
+
+                    /* 将父目录Inode指针保存起来，以后写目录项WriteDir()函数会用到 */
+                    u.u_pdir = pInode;
+
+                    if (freeEntryOffset) /* 此变量存放了空闲目录项位于目录文件中的偏移量 */
+                    {
+                        /* 将空闲目录项偏移量存入u区中，写目录项WriteDir()会用到 */
+                        u.u_IOParam.m_Offset = freeEntryOffset - (DirectoryEntry::DIRSIZ + 4);
+                    }
+                    else /*问题：为何if分支没有置IUPD标志？  这是因为文件的长度没有变呀*/
+                    {
+                        pInode->i_flag |= Inode::IUPD;
+                    }
+                    /* 找到可以写入的空闲目录项位置，NameI()函数返回 */
+                    return NULL;
+                }
+
+                /* 目录项搜索完毕而没有找到匹配项，释放相关Inode资源，并推出 */
+                u.u_error = User::ENOENT_;
+                goto out;
+            }
+
+            /* 已读完目录文件的当前盘块，需要读入下一目录项数据盘块 */
+            if (0 == u.u_IOParam.m_Offset % Inode::BLOCK_SIZE)
+            {
+                if (NULL != pBuf)
+                {
+                    bufMgr.Brelse(pBuf);
+                }
+                /* 计算要读的物理盘块号 */
+                int phyBlkno = pInode->Bmap(u.u_IOParam.m_Offset / Inode::BLOCK_SIZE);
+                pBuf = bufMgr.Bread(pInode->i_dev, phyBlkno);
+            }
+
+            /* 没有读完当前目录项盘块，则读取下一目录项至u.u_dent */
+            int *src = (int *)(pBuf->b_addr + (u.u_IOParam.m_Offset % Inode::BLOCK_SIZE));
+            Utility::DWordCopy(src, (int *)&u.u_dent, sizeof(DirectoryEntry) / sizeof(int));
+
+            u.u_IOParam.m_Offset += (DirectoryEntry::DIRSIZ + 4);
+            u.u_IOParam.m_Count--;
+
+            /* 如果是空闲目录项，记录该项位于目录文件中偏移量 */
+            if (0 == u.u_dent.m_ino)
+            {
+                if (0 == freeEntryOffset)
+                {
+                    freeEntryOffset = u.u_IOParam.m_Offset;
+                }
+                /* 跳过空闲目录项，继续比较下一目录项 */
+                continue;
+            }
+
+            int i;
+            for (i = 0; i < DirectoryEntry::DIRSIZ; i++)
+            {
+                if (u.u_dbuf[i] != u.u_dent.m_name[i])
+                {
+                    break; /* 匹配至某一字符不符，跳出for循环 */
+                }
+            }
+
+            if (i < DirectoryEntry::DIRSIZ)
+            {
+                /* 不是要搜索的目录项，继续匹配下一目录项 */
+                continue;
+            }
+            else
+            {
+                /* 目录项匹配成功，回到外层While(true)循环 */
+                break;
+            }
+        }
+
+        /*
+         * 从内层目录项匹配循环跳至此处，说明pathname中
+         * 当前路径分量匹配成功了，还需匹配pathname中下一路径
+         * 分量，直至遇到'\0'结束。
+         */
+        if (NULL != pBuf)
+        {
+            bufMgr.Brelse(pBuf);
+        }
+
+        /* 如果是删除操作，则返回父目录Inode，而要删除文件的Inode号在u.u_dent.m_ino中 */
+        if (FileManager::DELETE_ == mode && '\0' == curchar)
+        {
+            /* 如果对父目录没有写的权限 */
+            return pInode;
+        }
+
+        /*
+         * 匹配目录项成功，则释放当前目录Inode，根据匹配成功的
+         * 目录项m_ino字段获取相应下一级目录或文件的Inode。
+         */
+        short dev = pInode->i_dev;
+        this->m_InodeTable->IPut(pInode);
+        pInode = this->m_InodeTable->IGet(dev, u.u_dent.m_ino);
+        /* 回到外层While(true)循环，继续匹配Pathname中下一路径分量 */
+
+        if (NULL == pInode) /* 获取失败 */
+        {
+            return NULL;
+        }
+    }
+out:
+    this->m_InodeTable->IPut(pInode);
+    return NULL;
+}
 char FileManager::NextChar()
 {
     User &u = *User::getInst();
@@ -617,7 +818,7 @@ Inode *FileManager::MakNode(unsigned int mode)
     pInode->i_mode = mode | Inode::IALLOC;
     pInode->i_nlink = 1;
     pInode->i_uid = u.u_uid;
-    // pInode->i_gid = u.u_gid;
+    pInode->i_gid = 0;
     /* 将目录项写入u.u_dent，随后写入目录文件 */
     this->WriteDir(pInode);
     return pInode;
@@ -645,7 +846,7 @@ void FileManager::WriteDir(Inode *pInode)
     this->m_InodeTable->IPut(u.u_pdir);
 }
 
-void FileManager::SetCurDir(char *pathname)
+void FileManager::SetCurDir(const char *pathname)
 {
     User &u = *User::getInst();
 
@@ -671,47 +872,46 @@ void FileManager::SetCurDir(char *pathname)
  */
 int FileManager::Access(Inode *pInode, unsigned int mode)
 {
-    User &u = *User::getInst();
+    // User &u = *User::getInst();
+    //  /* 对于写的权限，必须检查该文件系统是否是只读的 */
+    //  if (Inode::IWRITE == mode)
+    //  {
+    //      if (this->m_FileSystem->GetFS(pInode->i_dev)->s_ronly != 0)
+    //      {
+    //          u.u_error = User::EROFS_;
+    //          return 1;
+    //      }
+    //  }
+    //  /*
+    //   * 对于超级用户，读写任何文件都是允许的
+    //   * 而要执行某文件时，必须在i_mode有可执行标志
+    //   */
+    //  if (u.u_uid == 0)
+    //  {
+    //      if (Inode::IEXEC == mode && (pInode->i_mode & (Inode::IEXEC | (Inode::IEXEC >> 3) | (Inode::IEXEC >> 6))) == 0)
+    //      {
+    //          u.u_error = User::EACCES_;
+    //          return 1;
+    //      }
+    //      return 0; /* Permission Check Succeed! */
+    //  }
 
-    /* 对于写的权限，必须检查该文件系统是否是只读的 */
-    if (Inode::IWRITE == mode)
-    {
-        if (this->m_FileSystem->GetFS(pInode->i_dev)->s_ronly != 0)
-        {
-            u.u_error = User::EROFS_;
-            return 1;
-        }
-    }
-    /*
-     * 对于超级用户，读写任何文件都是允许的
-     * 而要执行某文件时，必须在i_mode有可执行标志
-     */
-    if (u.u_uid == 0)
-    {
-        if (Inode::IEXEC == mode && (pInode->i_mode & (Inode::IEXEC | (Inode::IEXEC >> 3) | (Inode::IEXEC >> 6))) == 0)
-        {
-            u.u_error = User::EACCES_;
-            return 1;
-        }
-        return 0; /* Permission Check Succeed! */
-    }
-
-    u.u_error = User::EACCES_;
-    return 1;
+    // u.u_error = User::EACCES_;
+    return 0;
 }
 
-void FileManager::ChDir()
+void FileManager::ChDir(const char *path)
 {
     Inode *pInode;
     User &u = *User::getInst();
-
+    u.u_dirp = path;
     pInode = this->NameI(FileManager::NextChar, FileManager::OPEN_);
     if (NULL == pInode)
     {
         return;
     }
     /* 搜索到的文件不是目录文件 */
-    if ((pInode->i_mode & Inode::IFMT) != Inode::IFDIR)
+    if (!(pInode->i_mode & Inode::IFDIR))
     {
         u.u_error = User::ENOTDIR_;
         this->m_InodeTable->IPut(pInode);
@@ -724,9 +924,41 @@ void FileManager::ChDir()
     }
     this->m_InodeTable->IPut(u.u_cdir);
     u.u_cdir = pInode;
-    this->SetCurDir((char *)u.u_arg[0] /* pathname */);
+    this->SetCurDir(path /* pathname */);
 }
+void FileManager::UnLink(const char *path)
+{
+    Inode *pInode;
+    Inode *pDeleteInode;
+    User &u = *User::getInst();
+    u.u_dirp = path;
+    pDeleteInode = this->NameI(FileManager::NextChar, FileManager::DELETE_);
+    if (NULL == pDeleteInode)
+    {
+        return;
+    }
 
+    pInode = this->m_InodeTable->IGet(pDeleteInode->i_dev, u.u_dent.m_ino);
+    if (NULL == pInode)
+    {
+        Utility::Panic("unlink -- iget");
+    }
+
+    /* 写入清零后的目录项 */
+    u.u_IOParam.m_Offset -= (DirectoryEntry::DIRSIZ + 4);
+    u.u_IOParam.m_Base = (unsigned char *)&u.u_dent;
+    u.u_IOParam.m_Count = DirectoryEntry::DIRSIZ + 4;
+
+    u.u_dent.m_ino = 0;
+    pDeleteInode->WriteI();
+
+    /* 修改inode项 */
+    pInode->i_nlink--;
+    pInode->i_flag |= Inode::IUPD;
+
+    this->m_InodeTable->IPut(pDeleteInode);
+    this->m_InodeTable->IPut(pInode);
+}
 /*==========================class DirectoryEntry===============================*/
 DirectoryEntry::DirectoryEntry()
 {

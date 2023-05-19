@@ -63,6 +63,14 @@ void FileSystem::Initialize()
 }
 void FileSystem::formatDisk(int dev)
 {
+	DeviceManager &dv = *DeviceManager::getInst();
+	// 系统调用后输出流会出错，好神秘啊
+	//  VirtualDist *disk = dynamic_cast<VirtualDist *>(dv.GetBlockDevice(DEFALT_DEV));
+	//  disk->quit();
+	//  system("cd img & del disk.img & fsutil file createnew disk.img 8388608");
+
+	// disk->reuse();
+
 	SuperBlock sb;
 	this->m_Mount[0].m_dev = DeviceManager::ROOTDEV;
 	this->m_Mount[0].m_spb = &g_spb;
@@ -106,11 +114,24 @@ void FileSystem::formatDisk(int dev)
 	}
 	m_BufferManager->Bflush(dev);
 	LoadSuperBlock();
+
 	for (int i = sb.s_fsize - 1; i >= 1024; --i)
 	{
 		this->Free(dev, i);
 	}
+	Inode rootdir;
+	rootdir.i_dev = 0;
+	rootdir.i_size = 0;
+	rootdir.i_nlink = 1;
+	rootdir.i_count = 1;
+	rootdir.i_flag = Inode::IUPD;
+	rootdir.i_number = ROOTINO;
+	rootdir.i_mode |= Inode::IFDIR | Inode::IALLOC | Inode::IRWXU;
+
+	rootdir.IUpdate(time(nullptr));
 	Update();
+
+	FileManager::getInst()->Initialize();
 }
 
 void FileSystem::LoadSuperBlock()
@@ -187,7 +208,7 @@ void FileSystem::Update()
 			sb = this->m_Mount[i].m_spb;
 
 			/* 如果该SuperBlock内存副本没有被修改，直接管理inode和空闲盘块被上锁或该文件系统是只读文件系统 */
-			if (sb->s_fmod == 0 || sb->s_ilock != 0 || sb->s_flock != 0 || sb->s_ronly != 0)
+			if (sb->s_fmod == 0)
 			{
 				continue;
 			}

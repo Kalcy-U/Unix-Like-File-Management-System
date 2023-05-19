@@ -65,7 +65,7 @@ void Inode::ReadI()
 	this->i_flag |= Inode::IACC;
 
 	/* 一次一个字符块地读入所需全部数据，直至遇到文件尾 */
-	while (User::NOERROR == u.u_error && u.u_IOParam.m_Count != 0)
+	while (u.u_IOParam.m_Count != 0)
 	{
 		lbn = bn = u.u_IOParam.m_Offset / Inode::BLOCK_SIZE;
 		offset = u.u_IOParam.m_Offset % Inode::BLOCK_SIZE;
@@ -161,7 +161,7 @@ void Inode::WriteI()
 		return;
 	}
 
-	while (User::NOERROR == u.u_error && u.u_IOParam.m_Count != 0)
+	while (User::NOERROR_ == u.u_error && u.u_IOParam.m_Count != 0)
 	{
 		lbn = u.u_IOParam.m_Offset / Inode::BLOCK_SIZE;
 		offset = u.u_IOParam.m_Offset % Inode::BLOCK_SIZE;
@@ -204,7 +204,7 @@ void Inode::WriteI()
 		u.u_IOParam.m_Offset += nbytes;
 		u.u_IOParam.m_Count -= nbytes;
 
-		if (u.u_error != User::NOERROR) /* 写过程中出错 */
+		if (u.u_error != User::NOERROR_) /* 写过程中出错 */
 		{
 			bufMgr.Brelse(pBuf);
 		}
@@ -491,7 +491,7 @@ void Inode::IUpdate(int time)
 
 	/* 当IUPD和IACC标志之一被设置，才需要更新相应DiskInode
 	 * 目录搜索，不会设置所途径的目录文件的IACC和IUPD标志 */
-	if ((this->i_flag & (Inode::IUPD | Inode::IACC)) != 0)
+	if (1) // debug 全更新了
 	{
 		if (filesys.GetFS(this->i_dev)->s_ronly != 0)
 		{

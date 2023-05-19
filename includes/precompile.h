@@ -1,3 +1,4 @@
+#pragma once
 #ifndef PRECOMPILE_SETINGS_H
 #define PRECOMPILE_SETINGS_H
 #ifdef __linux__
@@ -9,7 +10,7 @@ void sleepms(int t)
 }
 #elif defined(_WIN32) || defined(_WIN64)
 // Windows-specific code
-#include<Windows.h>
+#include <Windows.h>
 void sleepms(int t)
 {
 	Sleep(t);

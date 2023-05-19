@@ -103,7 +103,6 @@ Inode *InodeTable::IGet(short dev, int inumber)
          * 增加其引用计数，增设ILOCK标志并返回之
          */
         pInode->i_count++;
-        pInode->i_flag |= Inode::ILOCK;
         return pInode;
     }
     else /* 没有Inode的内存拷贝，则分配一个空闲内存Inode */
@@ -121,8 +120,7 @@ Inode *InodeTable::IGet(short dev, int inumber)
             /* 设置新的设备号、外存Inode编号，增加引用计数，对索引节点上锁 */
             pInode->i_dev = dev;
             pInode->i_number = inumber;
-            pInode->i_flag = Inode::ILOCK;
-            pInode->i_count++;
+            pInode->i_count = 1; // DEBUG 修改了从内存读取来的Inode引用数默认为1
             pInode->i_lastr = -1;
 
             BufferManager &bm = *BufferManager::getInst();
@@ -150,14 +148,16 @@ Inode *InodeTable::IGet(short dev, int inumber)
 void InodeTable::IPut(Inode *pNode)
 {
     /* 当前进程为引用该内存Inode的唯一进程，且准备释放该内存Inode */
+    if (pNode->i_number == 0)
+        return; // 永不释放根目录
     if (pNode->i_count == 1)
     {
         /*
          * 上锁，因为在整个释放过程中可能因为磁盘操作而使得该进程睡眠，
          * 此时有可能另一个进程会对该内存Inode进行操作，这将有可能导致错误。
          */
-        pNode->i_flag |= Inode::ILOCK;
-
+        if (pNode->i_number < 0)
+            return;
         /* 该文件已经没有目录路径指向它 */
         if (pNode->i_nlink <= 0)
         {

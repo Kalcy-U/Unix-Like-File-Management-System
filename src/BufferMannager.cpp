@@ -5,7 +5,7 @@
 #include <iomanip>
 #include <string.h>
 #include <thread>
-
+#include <exception>
 void thread_awrite(BufferManager *bfm, Buf *bp)
 {
     bfm->Bawrite(bp);
@@ -58,6 +58,10 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
     // 搜索全部缓存，看有没有可重用的
 
     Buf *buf_reuse = nullptr;
+    if (blkno < 0)
+    {
+        printf("zzz\n");
+    }
 
     for (int i = 0; i < NBUF; i++)
     {
@@ -82,7 +86,8 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
         }
         buf_first->b_blkno = blkno;
         buf_first->b_dev = dev;
-        buf_first->b_flags |= Buf::BufFlag::B_USING;
+        // debug 之前没有把flag覆盖，重用的块带有B_DONE标记，误以为IO已完成
+        buf_first->b_flags = Buf::BufFlag::B_USING;
 
         return buf_first;
     }

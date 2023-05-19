@@ -17,9 +17,9 @@ public:
     /* 目录搜索模式，用于NameI()函数 */
     enum DirectorySearchMode
     {
-        OPEN_ = 0,  /* 以打开文件方式搜索目录 */
+        OPEN_ = 0,   /* 以打开文件方式搜索目录 */
         CREATE_ = 1, /* 以新建文件方式搜索目录 */
-        DELETE_ = 2 /* 以删除文件方式搜索目录 */
+        DELETE_ = 2  /* 以删除文件方式搜索目录 */
     };
     static FileManager inst;
     /* Functions */
@@ -38,12 +38,12 @@ public:
     /*
      * @comment Open()系统调用处理过程
      */
-    void Open();
+    int Open(const char *path, int mode);
 
     /*
      * @comment Creat()系统调用处理过程
      */
-    void Creat();
+    int Creat(const char *path, int mode);
 
     /*
      * @comment Open()、Creat()系统调用的公共部分
@@ -53,27 +53,27 @@ public:
     /*
      * @comment Close()系统调用处理过程
      */
-    void Close();
+    void Close(int fd);
 
     /*
      * @comment Seek()系统调用处理过程
      */
-    void Seek();
+    void Seek(int fd, int offset, int mode);
 
     /*
      * @comment Dup()复制进程打开文件描述符
      */
-    void Dup();
+    void Dup(int fd);
 
     /*
      * @comment FStat()获取文件信息
      */
-    void FStat();
+    void FStat(int fd);
 
     /*
      * @comment FStat()获取文件信息
      */
-    void Stat();
+    void Stat(int fd);
 
     /* FStat()和Stat()系统调用的共享例程 */
     void Stat1(Inode *pInode, unsigned long statBuf);
@@ -81,24 +81,24 @@ public:
     /*
      * @comment Read()系统调用处理过程
      */
-    void Read();
+    int Read(int fd, unsigned char *buffer, int count);
 
     /*
      * @comment Write()系统调用处理过程
      */
-    void Write();
+    int Write(int fd, unsigned char *buffer, int count);
 
     /*
      * @comment 读写系统调用公共部分代码
      */
-    void Rdwr(enum File::FileFlags mode);
+    int Rdwr(enum File::FileFlags mode, int fd, unsigned char *buffer, int count);
 
     /*
      * @comment 目录搜索，将路径转化为相应的Inode，
      * 返回上锁后的Inode
      */
     Inode *NameI(char (*func)(), enum DirectorySearchMode mode);
-
+    Inode *NameI(std::string name, enum DirectorySearchMode mode);
     /*
      * @comment 获取路径中的下一个字符
      */
@@ -117,7 +117,7 @@ public:
     /*
      * @comment 设置当前工作路径
      */
-    void SetCurDir(char *pathname);
+    void SetCurDir(const char *pathname);
 
     /*
      * @comment 检查对文件或目录的搜索、访问权限，作为系统调用的辅助函数
@@ -128,7 +128,10 @@ public:
     void ChMod();
 
     /* 改变当前工作目录 */
-    void ChDir();
+    void ChDir(const char *path);
+    void UnLink(const char *path);
+    int MkNod(const char *path, int mode);
+    int Tellp(int fd);
 
 public:
     /* 根目录内存Inode */

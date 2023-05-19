@@ -24,7 +24,7 @@ void Shell::Interface()
         string str;
         int count = 0;
         cout << endl
-             << "> ";
+             << m_user->u_curdir << ": ";
         while (cin >> str)
         {
             if ('\n' == getchar())
