@@ -544,23 +544,7 @@ void Inode::ITrunc()
 	/* 获取g_FileSystem对象的引用，执行释放磁盘块的操作 */
 	FileSystem &filesys = *FileSystem::getInst();
 
-	/* 如果是字符设备或者块设备则退出 */
-	if (this->i_mode & (Inode::IFCHR & Inode::IFBLK))
-	{
-		return;
-	}
-
 	/* 采用FILO方式释放，以尽量使得SuperBlock中记录的空闲盘块号连续。
-	 *
-	 * Unix V6++的文件索引结构：(小型、大型和巨型文件)
-	 * (1) i_addr[0] - i_addr[5]为直接索引表，文件长度范围是0 - 6个盘块；
-	 *
-	 * (2) i_addr[6] - i_addr[7]存放一次间接索引表所在磁盘块号，每磁盘块
-	 * 上存放128个文件数据盘块号，此类文件长度范围是7 - (128 * 2 + 6)个盘块；
-	 *
-	 * (3) i_addr[8] - i_addr[9]存放二次间接索引表所在磁盘块号，每个二次间接
-	 * 索引表记录128个一次间接索引表所在磁盘块号，此类文件长度范围是
-	 * (128 * 2 + 6 ) < size <= (128 * 128 * 2 + 128 * 2 + 6)
 	 */
 	for (int i = 9; i >= 0; i--) /* 从i_addr[9]到i_addr[0] */
 	{
