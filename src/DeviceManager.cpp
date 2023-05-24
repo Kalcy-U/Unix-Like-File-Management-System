@@ -1,7 +1,6 @@
 
 #include "../includes/DeviceManager.h"
-
-#define PATH "E:\\courses\\OS\\FileManageSys\\FileSysNew\\img"
+#include "../includes/properties.h"
 
 DeviceManager::DeviceManager()
 {

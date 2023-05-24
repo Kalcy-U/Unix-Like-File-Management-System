@@ -3,16 +3,19 @@
 #include "./includes/User.h"
 #include "./includes/FileSystem.h"
 #include "./includes/Utility.hpp"
+#include "./includes/shell.h"
 #include <cstring>
 #include <fstream>
 
+#define RUN_TEST_CASE false
 #define TEST_BUFFER 0
 #define TEST_FLUSH 0
 #define FORMAT_DISK 0
-#define TEST_CREATE 0
-#define TEST_WRITE 0
+#define TEST_CREATE 1
+#define TEST_WRITE 1
 #define TEST_READ 0
-#define TEST_CRW 1 // 读写综合测试
+#define TEST_CRW 0 // 读写综合测试
+
 // 静态对象实例化
 //  涉及到析构时资源有序释放，因此实例化的顺序不能改
 DeviceManager DeviceManager::inst;
@@ -34,7 +37,7 @@ int main()
     us.u_cdir = pRootInode;
     us.u_pdir = pRootInode;
     Utility::StringCopy("/", us.u_curdir);
-
+#if RUN_TEST_CASE
     if (TEST_BUFFER)
     {
         bufferManager.showFreeList();
@@ -110,10 +113,13 @@ int main()
         fileManager.Read(fd2, buffer, 32 * 3);
         Utility::DWordCopy((int *)buffer, (int *)etr, 32 * 3);
         printf("entry0 ino=%d,name=%s\n", etr[0].m_ino, etr[0].m_name);
+        fileSystem.Update(); // debug:TEST_CREAT和TEST_WRITE不能连续操作，因为没有同步到磁盘就重新loadSuperBlock了
+        bufferManager.Bflush(DEFALT_DEV);
     }
 
     if (TEST_WRITE)
     {
+
         fileSystem.LoadSuperBlock();
         int fd = fileManager.Open("/home/texts/Jerry.txt", File::FWRITE | File::FREAD);
         if (fd >= 0)
@@ -127,6 +133,7 @@ int main()
         }
         printf("将一张图片放在home/photos文件夹下\n");
         fd = fileManager.Creat("/home/photos/testimage.jpg", Inode::IRWXU);
+        Inode *pInode = user.u_ofiles.GetF(fd)->f_inode;
 
         if (fd >= 0)
         {
@@ -183,5 +190,12 @@ int main()
             fileManager.Close(fd);
         }
     }
+#else
+    fileSystem.LoadSuperBlock();
+    Shell shell;
+    shell.Start(Shell::DebugMode::OFF);
+
+#endif
+
     return 0;
 }

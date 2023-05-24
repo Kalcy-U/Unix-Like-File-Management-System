@@ -22,6 +22,7 @@ public:
         DELETE_ = 2  /* 以删除文件方式搜索目录 */
     };
     static FileManager inst;
+
     /* Functions */
 public:
     /* Constructors */

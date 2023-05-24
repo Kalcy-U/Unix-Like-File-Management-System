@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0.0)
 # 可以在linux上使用cmake --version 命令查看cmake版本，在该txt文件中写的最小版本比它小就行
 project(FileManagementSystem)
-
+SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR})
 SET(CMAKE_BUILD_TYPE "Debug")  
 
 
@@ -17,5 +17,5 @@ aux_source_directory(. SRC)
 aux_source_directory(./src src)  #debug: aux应该不能递归搜索，需要显示地写出cpp文件的目录
 
 #编译SRC变量所代表的源代码文件，生成main可执行件
-add_executable(fsys ${SRC} ${src})
+add_executable(filesys ${SRC} ${src})
  

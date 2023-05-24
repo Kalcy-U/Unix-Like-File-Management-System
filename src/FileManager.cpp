@@ -765,7 +765,6 @@ Inode *FileManager::NameI(std::string name, enum DirectorySearchMode mode)
         /* 如果是删除操作，则返回父目录Inode，而要删除文件的Inode号在u.u_dent.m_ino中 */
         if (FileManager::DELETE_ == mode && '\0' == curchar)
         {
-            /* 如果对父目录没有写的权限 */
             return pInode;
         }
 
@@ -932,12 +931,13 @@ void FileManager::UnLink(const char *path)
     Inode *pDeleteInode;
     User &u = *User::getInst();
     u.u_dirp = path;
+    /*unlink文件的父目录*/
     pDeleteInode = this->NameI(FileManager::NextChar, FileManager::DELETE_);
     if (NULL == pDeleteInode)
     {
         return;
     }
-
+    /*unlink文件本身*/
     pInode = this->m_InodeTable->IGet(pDeleteInode->i_dev, u.u_dent.m_ino);
     if (NULL == pInode)
     {

@@ -13,4 +13,5 @@ namespace Utility
     void StringCopy(char const *src, char *dst);
     std::vector<std::string> Split(const std::string &str, char c);
     void DebugInfo(const char *format, ...);
+    bool AllisNum(std::string str);
 }

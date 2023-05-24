@@ -2,20 +2,29 @@
 #include "User.h"
 #include "Filesystem.h"
 #include "FileManager.h"
+#include "BufferManager.h"
+#include "DeviceManager.h"
 class Shell
 {
-    enum DebugMode
-    {
-        ON,
-        OFF
-    };
 
 public:
+    enum DebugMode
+    {
+        OFF,
+        ON
+    };
+
     Shell();
     void Start(int mode = DebugMode::OFF);
-    void Interface();
 
-private:
+    void Usage();
+
+protected:
     User *m_user;
     FileManager *m_fileManager;
+    FileSystem *m_fileSystem;
+    DeviceManager *m_deviceManager;
+    BufferManager *m_bufferManager;
+    char buffer[1000];
+    void Interface();
 };

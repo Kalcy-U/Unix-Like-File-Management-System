@@ -75,9 +75,9 @@ void FileSystem::formatDisk(int dev)
 	this->m_Mount[0].m_dev = DeviceManager::ROOTDEV;
 	this->m_Mount[0].m_spb = &g_spb;
 
-	sb.s_isize = 200;					/* 外存Inode区占用的盘块数 */
-	sb.s_fsize = 1024 * 1024 * 8 / 512; /* 盘块总数 */
-	sb.s_nfree = 0;						/* 直接管理的空闲盘块数量 */
+	sb.s_isize = 200;		/* 外存Inode区占用的盘块数 */
+	sb.s_fsize = BLOCK_NUM; /* 盘块总数 */
+	sb.s_nfree = 0;			/* 直接管理的空闲盘块数量 */
 	for (int i = 0; i < 100; i++)
 	{
 		sb.s_free[i] = 0;
@@ -115,7 +115,7 @@ void FileSystem::formatDisk(int dev)
 	m_BufferManager->Bflush(dev);
 	LoadSuperBlock();
 
-	for (int i = sb.s_fsize - 1; i >= 1024; --i)
+	for (int i = sb.s_fsize - 1; i >= DATA_ZONE_START_SECTOR; --i)
 	{
 		this->Free(dev, i);
 	}
@@ -261,22 +261,8 @@ Inode *FileSystem::IAlloc(int dev)
 	/* 获取相应设备的SuperBlock内存副本 */
 	sb = this->GetFS(dev);
 
-	// /* 如果SuperBlock空闲Inode表被上锁，则睡眠等待至解锁 */
-	// while (sb->s_ilock)
-	// {
-	// 	u.u_procp->Sleep((unsigned long)&sb->s_ilock, ProcessManager::PINOD);
-	// }
-
-	/*
-	 * SuperBlock直接管理的空闲Inode索引表已空，
-	 * 必须到磁盘上搜索空闲Inode。先对inode列表上锁，
-	 * 因为在以下程序中会进行读盘操作可能会导致进程切换，
-	 * 其他进程有可能访问该索引表，将会导致不一致性。
-	 */
 	if (sb->s_ninode <= 0)
 	{
-		/* 空闲Inode索引表上锁 */
-		sb->s_ilock++;
 
 		/* 外存Inode编号从0开始，这不同于Unix V6中外存Inode从1开始编号 */
 		ino = -1;
@@ -301,7 +287,6 @@ Inode *FileSystem::IAlloc(int dev)
 				{
 					continue;
 				}
-
 				/*
 				 * 如果外存inode的i_mode==0，此时并不能确定
 				 * 该inode是空闲的，因为有可能是内存inode没有写到
@@ -329,9 +314,6 @@ Inode *FileSystem::IAlloc(int dev)
 				break;
 			}
 		}
-		// /* 解除对空闲外存Inode索引表的锁，唤醒因为等待锁而睡眠的进程 */
-		// sb->s_ilock = 0;
-		// Kernel::Instance().GetProcessManager().WakeUpAll((unsigned long)&sb->s_ilock);
 
 		/* 如果在磁盘上没有搜索到任何可用外存Inode，返回NULL */
 		if (sb->s_ninode <= 0)
@@ -381,15 +363,6 @@ void FileSystem::IFree(int dev, int number)
 	SuperBlock *sb;
 
 	sb = this->GetFS(dev); /* 获取相应设备的SuperBlock内存副本 */
-
-	/*
-	 * 如果超级块直接管理的空闲Inode表上锁，
-	 * 则释放的外存Inode散落在磁盘Inode区中。
-	 */
-	if (sb->s_ilock)
-	{
-		return;
-	}
 
 	/*
 	 * 如果超级块直接管理的空闲外存Inode超过100个，
@@ -502,12 +475,6 @@ void FileSystem::Free(int dev, int blkno)
 	 */
 	sb->s_fmod = 1;
 
-	/* 如果空闲磁盘块索引表被上锁，则睡眠等待解锁 */
-	// while (sb->s_flock)
-	// {
-	// 	u.u_procp->Sleep((unsigned long)&sb->s_flock, ProcessManager::PINOD);
-	// }
-
 	/* 检查释放磁盘块的合法性 */
 	if (this->BadBlock(sb, dev, blkno))
 	{
@@ -555,23 +522,7 @@ void FileSystem::Free(int dev, int blkno)
 	sb->s_fmod = 1;
 }
 
-Mount *FileSystem::GetMount(Inode *pInode)
-{
-	/* 遍历系统的装配块表 */
-	for (int i = 0; i <= FileSystem::NMOUNT; i++)
-	{
-		Mount *pMount = &(this->m_Mount[i]);
-
-		/* 找到内存Inode对应的Mount装配块 */
-		if (pMount->m_inodep == pInode)
-		{
-			return pMount;
-		}
-	}
-	return NULL; /* 查找失败 */
-}
-
 bool FileSystem::BadBlock(SuperBlock *spb, int dev, int blkno)
 {
-	return 0;
+	return blkno < DATA_ZONE_START_SECTOR;
 }

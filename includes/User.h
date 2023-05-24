@@ -87,9 +87,14 @@ public:
     /* Member Functions */
 public:
     /* 获取当前用户工作目录 */
-    void Pwd();
-    User(int debug = 1) { Debug = debug; };
+    const char *Pwd() { return u_curdir; };
+    User(int debug = 1)
+    {
+        Debug = debug;
+        u_uid = 0;
+    };
     static User *getInst() { return &inst; };
+    void clear() { u_error = NOERROR_; };
 };
 
 #endif

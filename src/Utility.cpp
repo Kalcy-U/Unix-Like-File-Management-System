@@ -76,3 +76,20 @@ void Utility::DebugInfo(const char *format, ...)
         va_end(args);
     }
 }
+
+bool Utility::AllisNum(std::string str)
+{
+    for (int i = 0; i < str.size(); i++)
+    {
+        int tmp = (int)str[i];
+        if (tmp >= 48 && tmp <= 57)
+        {
+            continue;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    return true;
+}

@@ -4,7 +4,7 @@
 #include "Buf.h"
 #include "BufferManager.h"
 #include "INode.h"
-
+#include "properties.h"
 /*
  * 文件系统存储资源管理块(Super Block)的定义。
  */
@@ -71,15 +71,15 @@ public:
 
     static const int SUPER_BLOCK_SECTOR_NUMBER = 200; /* 定义SuperBlock位于磁盘上的扇区号，占据200，201两个扇区。 */
 
-    static const int ROOTINO = 0; /* 文件系统根目录外存Inode编号 */
-
+    static const int ROOTINO = 0;                   /* 文件系统根目录外存Inode编号 */
+    static const int BLOCK_NUM = VDISK_BLOCK_NUM;   //! 大小与disk.img对应
     static const int INODE_NUMBER_PER_SECTOR = 8;   /* 外存INode对象长度为64字节，每个磁盘块可以存放512/64 = 8个外存Inode */
     static const int INODE_ZONE_START_SECTOR = 202; /* 外存Inode区位于磁盘上的起始扇区号 */
     static const int INODE_ZONE_SIZE = 1024 - 202;  /* 磁盘上外存Inode区占据的扇区数 */
 
-    static const int DATA_ZONE_START_SECTOR = 1024;                   /* 数据区的起始扇区号 */
-    static const int DATA_ZONE_END_SECTOR = 18000 - 1;                /* 数据区的结束扇区号 */
-    static const int DATA_ZONE_SIZE = 18000 - DATA_ZONE_START_SECTOR; /* 数据区占据的扇区数量 */
+    static const int DATA_ZONE_START_SECTOR = 1024;                       /* 数据区的起始扇区号 */
+    static const int DATA_ZONE_END_SECTOR = BLOCK_NUM - 1;                /* 数据区的结束扇区号 */
+    static const int DATA_ZONE_SIZE = BLOCK_NUM - DATA_ZONE_START_SECTOR; /* 数据区占据的扇区数量 */
 
     static FileSystem inst;
     /* Functions */
@@ -94,7 +94,7 @@ public:
      */
     void Initialize();
 
-        void formatDisk(int dev);
+    void formatDisk(int dev);
 
     /*
      * @comment 系统初始化时读入SuperBlock
@@ -135,7 +135,6 @@ public:
     /*
      * @comment 查找文件系统装配表，搜索指定Inode对应的Mount装配块
      */
-    Mount *GetMount(Inode *pInode);
 
     static FileSystem *getInst() { return &inst; };
 
