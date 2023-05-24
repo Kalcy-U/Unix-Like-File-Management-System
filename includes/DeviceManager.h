@@ -24,7 +24,7 @@ public:
     static DeviceManager *getInst() { return &inst; };
 
 protected:
-    int nblkdev;                           /* 系统中块设备的数量 @line 4631 */
+    int nblkdev;
     BlockDevice *DevTable[MAX_DEVICE_NUM]; /* 指向块设备基类的指针数组，相当于Unix V6中块设备开关表 */
 };
 

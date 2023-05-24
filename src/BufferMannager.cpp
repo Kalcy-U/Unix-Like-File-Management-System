@@ -82,7 +82,7 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
         if (buf_first->b_flags & Buf::BufFlag::B_DELWRI)
         {
             // 直接送Bwrite
-            Bwrite(buf_first);
+            Bwrite(buf_first); // 包含了块释放
             return GetBlk(dev, blkno);
         }
         buf_first->b_blkno = blkno;

@@ -389,11 +389,9 @@ Inode *FileManager::NameI(char (*func)(), enum DirectorySearchMode mode)
     {
         pInode = this->rootDirInode;
     }
-
     /* 检查该Inode是否正在被使用，以及保证在整个目录搜索过程中该Inode不被释放 */
     this->m_InodeTable->IGet(pInode->i_dev, pInode->i_number);
 
-    /* 允许出现////a//b 这种路径 这种路径等价于/a/b */
     while ('/' == curchar)
     {
         curchar = (*func)();
