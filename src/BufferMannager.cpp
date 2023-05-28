@@ -106,8 +106,6 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
     {
         buf_mutex[buf_reuse->b_no].lock();
         buf_mutex[buf_reuse->b_no].unlock();
-        // while (buf_reuse->b_flags & Buf::BufFlag::B_USING)
-        //     sleepms(600);
         NotAvail(buf_reuse);
         return buf_reuse;
     }
@@ -126,7 +124,7 @@ void BufferManager::Brelse(Buf *bp)
 {
     if (bp != nullptr && (bp->b_flags & Buf::B_USING)) // 如果B_USING=false，不再执行
     {
-        bp->b_flags &= ~(Buf::B_USING | Buf::B_ASYNC);
+        
         // 放入队尾
         Buf *freeP = &bFreeList;
         while (freeP->b_back != nullptr)
@@ -134,7 +132,8 @@ void BufferManager::Brelse(Buf *bp)
         freeP->b_back = bp;
         bp->b_forw = freeP;
         bp->b_back = nullptr;
-        // std::cout << "buffer " << bp->b_no << " is released." << std::endl;
+        /*一定要最后再改标志*/
+        bp->b_flags &= ~(Buf::B_USING | Buf::B_ASYNC);
     }
 }
 /// @brief 读一个块，包含请求块、同步读、加done标，不含块释放
@@ -195,7 +194,7 @@ void BufferManager::Bdwrite(Buf *bp)
     this->Brelse(bp);
     return;
 }
-/// @brief 异步写，完成后释放。在Bawrite中注册了线程来调用。对缓存块加锁，注意加锁的位置尽量覆盖对缓存的更改。
+/// @brief 异步写，完成后释放。在Bwrite中注册了线程来调用。对缓存块加锁，注意加锁的位置尽量覆盖对缓存的更改。
 /// @param bp
 void BufferManager::Bawrite(Buf *bp)
 {
@@ -204,8 +203,7 @@ void BufferManager::Bawrite(Buf *bp)
     bp->b_flags |= (Buf::B_ASYNC | Buf::B_USING);
     DeviceManager::getInst()->GetBlockDevice(bp->b_dev)->Write(bp);
     bp->b_flags &= ~Buf::B_ASYNC;
-    bp->b_flags |= Buf::BufFlag::B_DONE;
-
+    /*加锁的位置尽量覆盖对缓存的更改 所以先释放再解锁*/
     Brelse(bp);
     buf_mutex[bp->b_no].unlock();
     return;
@@ -223,7 +221,6 @@ void BufferManager::ClrBuf(Buf *bp)
 }
 void BufferManager::Bflush(short dev)
 {
-    // 通过测试
     Buf *freeP = bFreeList.b_back;
     while (freeP != nullptr)
     {

@@ -33,6 +33,7 @@ int main()
     FileManager &fileManager = *(FileManager::getInst());
     fileManager.Initialize();
     Inode *pRootInode = FORMAT_DISK ? NULL : fileManager.rootDirInode = g_InodeTable.IGet(DeviceManager::ROOTDEV, FileSystem::ROOTINO);
+    if(!FORMAT_DISK)  fileSystem.LoadSuperBlock();/*必须load一下，不然析构有问题*/
     User &us = *User::getInst();
     us.u_cdir = pRootInode;
     us.u_pdir = pRootInode;
@@ -41,16 +42,17 @@ int main()
     if (TEST_BUFFER)
     {
         bufferManager.showFreeList();
-        Buf *b0 = bufferManager.Bread(0, 202);
-
+        printf("=====test async begin======\n");
         Buf *b1 = bufferManager.GetBlk(0, 1);
-        bufferManager.Brelse(b0);
         strcpy((char *)b1->b_addr, "abcdefg");
         b1->b_flags |= Buf::BufFlag::B_ASYNC;
-        bufferManager.Bwrite(b1);
+        printf("Async write (0,1).\n");
+        bufferManager.Bwrite(b1); /*异步写一个缓存，加done标，含块释放*/
         printf("Ask to read (0,1) again.\n");
-        bufferManager.Bread(0, 1);
+        Buf *b2 = bufferManager.Bread(0, 1); /*读一个块，包含请求块、同步读、加done标，不含块释放*/
+        bufferManager.Brelse(b2);
         bufferManager.showFreeList();
+        printf("=====test async end======\n");
     }
     if (TEST_FLUSH)
     {
@@ -87,7 +89,7 @@ int main()
     }
     if (TEST_CREATE)
     {
-        fileSystem.LoadSuperBlock();
+        // fileSystem.LoadSuperBlock();
 
         // debug:之前创建了目录项，但磁盘Inode中的模式没有写对，导致读取目录文件失败。后面虽然修改了模式，但因为目录项已经存在，所以跳过了Inode模式更新.只能格式化重来了
         // 有时候会出现很神秘的问题
@@ -119,8 +121,8 @@ int main()
 
     if (TEST_WRITE)
     {
-
-        fileSystem.LoadSuperBlock();
+        static char str[17 * 1024] = {0};
+        // fileSystem.LoadSuperBlock();
         int fd = fileManager.Open("/home/texts/Jerry.txt", File::FWRITE | File::FREAD);
         if (fd >= 0)
         {
@@ -138,7 +140,7 @@ int main()
         if (fd >= 0)
         {
 
-            static char str[17 * 1024] = {0};
+           
             std::ifstream ufile("img/testimage.jpg", std::ios::in | std::ios::binary);
             ufile.read(str, 17 * 1024);
             int imgsize = ufile.gcount();
@@ -147,11 +149,33 @@ int main()
             Inode *pInode = pFile->f_inode;
             printf("read:count=%d,inode.number=%d,isize=%d,tellp=%d\n", count, pInode->i_number, pInode->i_size, fileManager.Tellp(fd));
             fileManager.Close(fd);
+            ufile.close();
+        }
+        printf("将报告放在home/reports文件夹下\n");
+       
+        fd = fileManager.Creat("/home/reports/reports.pdf", Inode::IRWXU);
+        if (fd >= 0)
+        {
+
+            memset(str, 0, 17 * 1024);
+            std::ifstream ufile("report.pdf", std::ios::in | std::ios::binary);
+            File *pFile = user.u_ofiles.GetF(fd);
+            Inode *pInode = pFile->f_inode;
+            
+            while (!ufile.eof() && ufile.is_open())
+            {
+                ufile.read(str, 16 * 1024);
+                int imgsize = ufile.gcount();
+                int count = fileManager.Write(fd, (unsigned char *)str, imgsize);
+                printf("write:count=%d,inode.number=%d,isize=%d,tellp=%d\n", count, pInode->i_number, pInode->i_size, fileManager.Tellp(fd));
+            }
+            ufile.close();
+            fileManager.Close(fd);
         }
     }
     if (TEST_READ)
     {
-        fileSystem.LoadSuperBlock();
+        // fileSystem.LoadSuperBlock();
         int fd = fileManager.Open("/home/texts/LL.txt", File::FWRITE | File::FREAD);
         if (fd >= 0)
         {
@@ -165,7 +189,7 @@ int main()
     }
     if (TEST_CRW)
     {
-        fileSystem.LoadSuperBlock();
+        // fileSystem.LoadSuperBlock();
 
         printf("新建文件/test/Jerry，打开该文件，任意写入800个字节\n");
         int fd = fileManager.Creat("/home/texts/Jerry.txt", Inode::IRWXU);
@@ -191,7 +215,7 @@ int main()
         }
     }
 #else
-    fileSystem.LoadSuperBlock();
+    // fileSystem.LoadSuperBlock();
     Shell shell;
     shell.Start(Shell::DebugMode::OFF);
 

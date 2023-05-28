@@ -185,10 +185,7 @@ void InodeTable::UpdateInodeTable()
 {
     for (int i = 0; i < InodeTable::NINODE; i++)
     {
-        /*
-         * 如果Inode对象没有被上锁，即当前未被其它进程使用，可以同步到外存Inode；
-         * 并且count不等于0，count == 0意味着该内存Inode未被任何打开文件引用，无需同步。
-         */
+
         if (this->m_Inode[i].i_count != 0)
         {
             this->m_Inode[i].IUpdate(std::time(nullptr));

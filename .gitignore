@@ -2,3 +2,5 @@ build/
 img/Disk.img
 .vs/
 */*.exe
+*.docx
+*.pdf
