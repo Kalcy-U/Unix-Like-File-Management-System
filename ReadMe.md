@@ -10,3 +10,6 @@ $ make
 ```
 # 运行
 运行项目根目录下的可执行文件filesys。
+
+# 文档资料
+https://gamma.app/docs/Unix-robpcn2h4k44wwi
