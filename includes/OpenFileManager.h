@@ -3,7 +3,7 @@
 
 #include "File.h"
 #include "FileSystem.h"
-#include "INode.h"
+#include "Inode.h"
 
 /* Forward Declaration */
 class OpenFileTable;

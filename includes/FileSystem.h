@@ -3,7 +3,7 @@
 
 #include "Buf.h"
 #include "BufferManager.h"
-#include "INode.h"
+#include "Inode.h"
 #include "properties.h"
 /*
  * 文件系统存储资源管理块(Super Block)的定义。

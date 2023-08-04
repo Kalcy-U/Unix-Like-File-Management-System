@@ -6,7 +6,7 @@
 #include <unistd.h>
 void sleepms(int t)
 {
-	Sleep(t * 1000);
+	sleep(t * 1000);
 }
 #elif defined(_WIN32) || defined(_WIN64)
 // Windows-specific code

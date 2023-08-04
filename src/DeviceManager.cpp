@@ -5,7 +5,7 @@
 DeviceManager::DeviceManager()
 {
     nblkdev = 1;
-    DevTable[0] = new VirtualDisk(DEFALT_DEV, 1024 * 32, (std::string(PATH) + "\\disk.img").c_str());
+    DevTable[0] = new VirtualDisk(DEFALT_DEV, 1024 * 32, (std::string(PATH) + "/disk.img").c_str());
     for (int i = 1; i < MAX_DEVICE_NUM; i++)
     {
         DevTable[i] = nullptr;

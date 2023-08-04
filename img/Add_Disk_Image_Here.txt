@@ -2,3 +2,6 @@ FOR WINDOWS:在img文件夹下使用cmd命令`fsutil file createnew disk.img 335
 103424是Inode0
 102400是superBlock
 524288是第一个数据块
+
+FOR LINUX:
+`dd if=/dev/zero of=disk.img bs=32M count=1`

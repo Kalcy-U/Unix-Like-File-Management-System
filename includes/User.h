@@ -30,7 +30,7 @@ public:
 
         EACCES_ = 13, /* Permission denied */
         EFAULT_ = 14, /* Bad address */
-        ENOTBLK = 15, /* Block device required */
+     
 
         EEXIST_ = 17, /* File exists */
         EXDEV_ = 18,  /* Cross-device link */
@@ -48,7 +48,7 @@ public:
         EROFS_ = 30,   /* Read-only file system */
         EMLINK_ = 31,  /* Too many links */
         EPIPE_ = 32,   /* Broken pipe */
-        ENOSYS_ = 100,
+        ENOSYS_ = 100
         // EFAULT_	= 106
     };
 

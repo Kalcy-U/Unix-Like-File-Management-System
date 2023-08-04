@@ -18,6 +18,7 @@ void VirtualDisk::reuse()
         fstr.open("img/disk.img", std::ios::binary | std::ios::in | std::ios::out);
         if (!fstr.is_open())
         {
+            
             std::cout << "disk activate failed." << std::endl;
             return;
         }
