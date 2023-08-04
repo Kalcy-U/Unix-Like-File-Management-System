@@ -17,7 +17,6 @@ dd if=/dev/zero of=disk.img bs=32M count=1
 # 编译
 使用CMake编译生成。
 ```
-<<<<<<< HEAD
 cd build
 cmake ..
 make
