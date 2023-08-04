@@ -17,6 +17,7 @@ dd if=/dev/zero of=disk.img bs=32M count=1
 # 编译
 使用CMake编译生成。
 ```
+<<<<<<< HEAD
 cd build
 cmake ..
 make
@@ -27,5 +28,6 @@ make
 ./filesys
 ```
 ![](img/usage.png)
+
 # 文档资料
 https://gamma.app/docs/Unix-robpcn2h4k44wwi
