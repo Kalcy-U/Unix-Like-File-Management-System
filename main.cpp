@@ -7,12 +7,12 @@
 #include <cstring>
 #include <fstream>
 
-#define RUN_TEST_CASE false
-#define TEST_BUFFER 0
+#define RUN_TEST_CASE true
+#define TEST_BUFFER 1
 #define TEST_FLUSH 0
 #define FORMAT_DISK 0
-#define TEST_CREATE 1
-#define TEST_WRITE 1
+#define TEST_CREATE 0
+#define TEST_WRITE 0
 #define TEST_READ 0
 #define TEST_CRW 0 // 读写综合测试
 
@@ -43,13 +43,13 @@ int main()
     {
         bufferManager.showFreeList();
         printf("=====test async begin======\n");
-        Buf *b1 = bufferManager.GetBlk(0, 1);
+        Buf *b1 = bufferManager.GetBlk(0, 500);
         strcpy((char *)b1->b_addr, "abcdefg");
-        b1->b_flags |= Buf::BufFlag::B_ASYNC;
-        printf("Async write (0,1).\n");
-        bufferManager.Bwrite(b1); /*异步写一个缓存，加done标，含块释放*/
-        printf("Ask to read (0,1) again.\n");
-        Buf *b2 = bufferManager.Bread(0, 1); /*读一个块，包含请求块、同步读、加done标，不含块释放*/
+        printf("Async write (0,500).\n");
+        bufferManager.Bawrite(b1); /*异步写一个缓存，加done标，含块释放*/
+        bufferManager.showFreeList();
+        printf("Ask to read (0,500) again.\n");
+        Buf *b2 = bufferManager.Bread(0, 500); /*读一个块，包含请求块、同步读、加done标，不含块释放*/
         bufferManager.Brelse(b2);
         bufferManager.showFreeList();
         printf("=====test async end======\n");

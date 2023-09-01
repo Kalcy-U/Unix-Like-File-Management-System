@@ -1,6 +1,6 @@
 #ifndef BUF_H
 #define BUF_H
-
+#include<condition_variable>
 /*
  * 缓存控制块buf定义
  * 记录了相应缓存的使用情况等信息；
@@ -17,7 +17,7 @@ public:
         B_DONE = 0x4,  /* I/O操作结束 这个标识说明块可以重用*/
         // B_ERROR = 0x8,   /* I/O因出错而终止 */
         // B_BUSY = 0x10,   /* 相应缓存正在使用中 */
-        // B_WANTED = 0x20, /* 有进程正在等待使用该buf管理的资源，清B_BUSY标志时，要唤醒这种进程 */
+        B_WANTED = 0x20, /* 有进程正在等待使用该buf管理的资源，清B_BUSY标志时，要唤醒这种进程 */
         B_ASYNC = 0x40,  /* 异步I/O，不需要等待其结束 */
         B_DELWRI = 0x80, /* 延迟写，在相应缓存要移做他用时，再将其内容写到相应块设备上 */
         B_CLEAR = 0x8,   /*新增标志：块是干净的*/
@@ -39,20 +39,21 @@ public:
     int b_blkno;           /* 磁盘逻辑块号 */
     int b_error;           /* I/O出错时信息 */
     int b_resid;           /* I/O出错时尚未传送的剩余字节数 */
-
-public:
-    Buf()
-    {
-        b_no = -1;
-        b_flags = B_CLEAR;
-        b_forw = nullptr;
-        b_back = nullptr;
-        b_dev = -1;
-        b_wcount = -1;
-        b_addr = nullptr;
-        b_blkno = -1;
-        b_error = 0;
-        b_resid = 0;
+    
+     public :
+         std::condition_variable condv;
+         Buf()
+         {
+             b_no = -1;
+             b_flags = B_CLEAR;
+             b_forw = nullptr;
+             b_back = nullptr;
+             b_dev = -1;
+             b_wcount = -1;
+             b_addr = nullptr;
+             b_blkno = -1;
+             b_error = 0;
+             b_resid = 0;
     };
 };
 

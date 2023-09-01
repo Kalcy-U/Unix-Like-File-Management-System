@@ -33,7 +33,7 @@ public:
     void Bflush(short dev); /* 将dev指定设备队列中延迟写的缓存全部输出到磁盘 */
     Buf &GetBFreeList();    /* 获取自由缓存队列控制块Buf对象引用 */
     static BufferManager *getInst() { return &inst; };
-
+    std::mutex buf_mutex[NBUF]; /*解决异步写和getblk进程冲突*/
 protected:
     void GetError(Buf *bp); /* 获取I/O操作中发生的错误信息 */
     void NotAvail(Buf *bp); /* 从自由队列中摘下指定的缓存控制块buf */
@@ -42,7 +42,7 @@ protected:
     Buf bFreeList;                           /* 自由缓存队列控制块 */
     Buf m_Buf[NBUF];                         /* 缓存控制块数组 */
     unsigned char Buffer[NBUF][BUFFER_SIZE]; /* 缓冲区数组 */
-    std::mutex buf_mutex[NBUF];              /*解决异步写和getblk进程冲突*/
+    
     //    DeviceManager *m_DeviceManager; /* 指向设备管理模块全局对象 */
 };
 

@@ -7,10 +7,7 @@
 #include <string.h>
 #include <thread>
 #include <exception>
-void thread_awrite(BufferManager *bfm, Buf *bp)
-{
-    bfm->Bawrite(bp);
-}
+
 BufferManager::BufferManager()
 {
     memset((void *)Buffer, 0, NBUF * BUFFER_SIZE);
@@ -40,6 +37,7 @@ void BufferManager::showFreeList()
 }
 void BufferManager::NotAvail(Buf *bp)
 {
+    
     // 如果bp是队尾bp->b_back为null
     if (bp->b_back)
         bp->b_back->b_forw = bp->b_forw;
@@ -48,6 +46,7 @@ void BufferManager::NotAvail(Buf *bp)
     bp->b_forw = nullptr;
     /* 设置B_BUSY标志 */
     bp->b_flags |= Buf::B_USING;
+    
     return;
 }
 /// @brief 获得一个缓存块。
@@ -95,10 +94,11 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
     // 找不到任何空闲块（？）
     else if (buf_reuse == nullptr && !bFreeList.b_back)
     {
-        // 睡会儿算了
+        // 睡会儿算了 UNIX其实是在自由队列头指针加了B_WANTED，等有缓存被释放时唤醒
         sleepms(200);
         return GetBlk(dev, blkno);
     }
+    /* 已重构
     // 找到了可重用的缓存
     // 如果是自由的，加B_USING标志，移出队列
     // B_USING同时Getblk？应该是块正在进行异步IO。等开锁。
@@ -108,8 +108,27 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
         buf_mutex[buf_reuse->b_no].unlock();
         NotAvail(buf_reuse);
         return buf_reuse;
+    }*/
+    // 找到了可重用的缓存
+    // 如果是自由的，加B_USING标志，移出队列
+    // B_USING同时Getblk？应该是块正在进行异步IO。加B_WANTED等开锁
+    if (buf_reuse != nullptr && (buf_reuse->b_flags & (Buf::BufFlag::B_USING)))
+    {
+        std::unique_lock<std::mutex> lk(buf_mutex[buf_reuse->b_no]);
+        //加标志
+        buf_reuse->b_flags |= Buf::BufFlag::B_WANTED;
+
+        //条件变量需要锁住的是unique_lock 在等待期间它会放弃锁
+        buf_reuse->condv.wait(lk);
+
+        // 去除标志
+        buf_reuse->b_flags &= ~Buf::BufFlag::B_WANTED;
+        
+        NotAvail(buf_reuse);
+        return buf_reuse;
     }
-    else if (buf_reuse != nullptr && (buf_reuse->b_flags & (Buf::BufFlag::B_DONE)))
+
+    else if (buf_reuse != nullptr )
     {
         // 可重用
         NotAvail(buf_reuse);
@@ -122,6 +141,7 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
 /// @param bp
 void BufferManager::Brelse(Buf *bp)
 {
+
     if (bp != nullptr && (bp->b_flags & Buf::B_USING)) // 如果B_USING=false，不再执行
     {
         
@@ -149,9 +169,13 @@ Buf *BufferManager::Bread(int dev, int blkno)
     {
         return bp;
     }
-    DeviceManager::getInst()->GetBlockDevice(dev)->Read(bp);
-    bp->b_flags |= Buf::BufFlag::B_DONE;
-    // Brelse(bp);
+    bp->b_flags |= Buf::BufFlag::B_READ;
+   
+    DeviceManager::getInst()->GetBlockDevice(dev)->addToATA(bp);
+    //别忘记等待IO结束
+    std::unique_lock<std::mutex> lk(buf_mutex[bp->b_no]);
+    bp->condv.wait(lk);
+    printf("Bread return\n");
     return bp;
 }
 
@@ -165,24 +189,20 @@ void BufferManager::Bwrite(Buf *bp)
 {
     unsigned int flags;
 
+    
     flags = bp->b_flags;
     bp->b_flags &= ~(Buf::B_READ | Buf::B_DONE | Buf::B_DELWRI);
-    bp->b_wcount = BufferManager::BUFFER_SIZE; /* 512字节 */
-
-    // 同步写
+    bp->b_flags |= (Buf::B_WRITE | Buf::B_USING);
+    bp->b_wcount = BufferManager::BUFFER_SIZE;
+    DeviceManager::getInst()->GetBlockDevice(bp->b_dev)->addToATA(bp);//送IO队列并唤醒
     if ((flags & Buf::B_ASYNC) == 0)
     {
-        DeviceManager::getInst()->GetBlockDevice(bp->b_dev)->Write(bp);
-        bp->b_flags |= Buf::BufFlag::B_DONE;
-        Brelse(bp);
+        /* 同步写，需要等待I/O操作结束 */
+        std::unique_lock<std::mutex> lk(buf_mutex[bp->b_no]);
+        bp->condv.wait(lk);
     }
-    // 异步写
-    // 创建新线程来模拟异步写
-    else
-    {
-        std::thread writeThread(thread_awrite, getInst(), bp);
-        writeThread.detach();
-    }
+    Brelse(bp);
+    
     return;
 }
 /// @brief 延迟写，调整记号并释放。
@@ -191,6 +211,7 @@ void BufferManager::Bdwrite(Buf *bp)
 {
     /* 置上B_DONE允许其它进程使用该磁盘块内容 */
     bp->b_flags |= (Buf::B_DELWRI | Buf::B_DONE);
+    bp->b_wcount = BufferManager::BUFFER_SIZE;
     this->Brelse(bp);
     return;
 }
@@ -199,13 +220,9 @@ void BufferManager::Bdwrite(Buf *bp)
 void BufferManager::Bawrite(Buf *bp)
 {
     /* 标记为异步写 */
-    buf_mutex[bp->b_no].lock();
-    bp->b_flags |= (Buf::B_ASYNC | Buf::B_USING);
-    DeviceManager::getInst()->GetBlockDevice(bp->b_dev)->Write(bp);
-    bp->b_flags &= ~Buf::B_ASYNC;
-    /*加锁的位置尽量覆盖对缓存的更改 所以先释放再解锁*/
+    bp->b_flags |= (Buf::B_WRITE|Buf::B_ASYNC | Buf::B_USING);
+    DeviceManager::getInst()->GetBlockDevice(bp->b_dev)->addToATA(bp);
     Brelse(bp);
-    buf_mutex[bp->b_no].unlock();
     return;
 }
 /// @brief 清缓存
@@ -227,6 +244,7 @@ void BufferManager::Bflush(short dev)
 
         if (freeP->b_flags & Buf::B_DELWRI)
         {
+            this->NotAvail(freeP);
             this->Bwrite(freeP);
         }
         freeP = freeP->b_back;
