@@ -5,7 +5,6 @@
 #include "../includes/Utility.hpp"
 #include <iomanip>
 #include <string.h>
-#include <thread>
 #include <exception>
 
 BufferManager::BufferManager()
@@ -18,6 +17,8 @@ BufferManager::BufferManager()
         m_Buf[i].b_back = ((i + 1) < NBUF ? (&m_Buf[i + 1]) : nullptr);
         m_Buf[i].b_forw = (i - 1) >= 0 ? &m_Buf[i - 1] : &bFreeList;
         m_Buf[i].b_no = i;
+        m_Buf[i].b_flags = Buf::BufFlag::B_USING;
+        Brelse(m_Buf+i);
     }
 
     bFreeList.b_back = &m_Buf[0];
@@ -27,13 +28,26 @@ void BufferManager::showFreeList()
 {
     Buf *buf_first = bFreeList.b_back;
     int count = 0;
+    printf("b_no ,blkno,flags,WRITE ,READ  ,DONE  ,WANTED,ASYNC ,DELWRI,USING \n");
+   
     while (buf_first != nullptr)
     {
-        printf("b_no=%8d,dev=%8d,blkno=%8d,flags%8x\n", buf_first->b_no, buf_first->b_dev, buf_first->b_blkno, buf_first->b_flags);
+        //翻译B_FLAG
+        int B_WRITE = (buf_first->b_flags & Buf::BufFlag::B_WRITE) ? 1 : 0;
+        int B_READ = (buf_first->b_flags & Buf::BufFlag::B_READ)?1:0;
+        int B_DONE = (buf_first->b_flags & Buf::BufFlag::B_DONE) ? 1 : 0;
+        int B_WANTED =( buf_first->b_flags & Buf::BufFlag::B_WANTED) ? 1 : 0;
+        int B_ASYNC= (buf_first->b_flags & Buf::BufFlag::B_ASYNC) ? 1 : 0;
+        int B_DELWRI = (buf_first->b_flags & Buf::BufFlag::B_DELWRI) ? 1 : 0;
+        int B_USING = (buf_first->b_flags & Buf::BufFlag::B_USING) ? 1 : 0;
+
+        printf("5d,%5d,%5d,%6d,%6d,%6d,%6d,%6d,%6d,%6d\n", buf_first->b_no, buf_first->b_dev, buf_first->b_blkno, 
+            buf_first->b_flags, B_WRITE, B_READ, B_DONE, B_WANTED, B_ASYNC, B_DELWRI, B_USING);
         buf_first = buf_first->b_back;
         count++;
     }
-    std::cout << "free buffer count=" << std::dec << count << std::endl;
+    printf("free buffer count=%d\n", count);
+    
 }
 void BufferManager::NotAvail(Buf *bp)
 {
@@ -60,7 +74,7 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
     Buf *buf_reuse = nullptr;
     if (blkno < 0)
     {
-        Utility::DebugInfo("blk值无效\n");
+        Utility::Panic("blk值无效\n");
     }
 
     for (int i = 0; i < NBUF; i++)
@@ -74,13 +88,14 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
 
     // 找不到可重用块，取出自由队列队首
     Buf *buf_first = bFreeList.b_back;
-    buf_first = bFreeList.b_back;
+   
     if (buf_reuse == nullptr && buf_first)
     {
         NotAvail(buf_first);
         if (buf_first->b_flags & Buf::BufFlag::B_DELWRI)
         {
             // 直接送Bwrite
+            buf_first->b_flags |= Buf::BufFlag::B_ASYNC;
             Bwrite(buf_first); // 包含了块释放
             return GetBlk(dev, blkno);
         }
@@ -114,18 +129,12 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
     // B_USING同时Getblk？应该是块正在进行异步IO。加B_WANTED等开锁
     if (buf_reuse != nullptr && (buf_reuse->b_flags & (Buf::BufFlag::B_USING)))
     {
-        std::unique_lock<std::mutex> lk(buf_mutex[buf_reuse->b_no]);
+        
         //加标志
         buf_reuse->b_flags |= Buf::BufFlag::B_WANTED;
 
-        //条件变量需要锁住的是unique_lock 在等待期间它会放弃锁
-        buf_reuse->condv.wait(lk);
-
-        // 去除标志
-        buf_reuse->b_flags &= ~Buf::BufFlag::B_WANTED;
-        
-        NotAvail(buf_reuse);
-        return buf_reuse;
+        IOwait(buf_reuse);
+        return GetBlk(dev,blkno);
     }
 
     else if (buf_reuse != nullptr )
@@ -137,11 +146,11 @@ Buf *BufferManager::GetBlk(int dev, int blkno)
 
     return nullptr;
 }
-/// @brief 释放缓存，放入自由队列队尾
+/// @brief 释放缓存，放入自由队列队尾 带有锁;如果B_WANTED，那么唤醒并清除WANTED
 /// @param bp
 void BufferManager::Brelse(Buf *bp)
 {
-
+    std::unique_lock<std::mutex>lk(buf_mutex[bp->b_no]);
     if (bp != nullptr && (bp->b_flags & Buf::B_USING)) // 如果B_USING=false，不再执行
     {
         
@@ -154,6 +163,14 @@ void BufferManager::Brelse(Buf *bp)
         bp->b_back = nullptr;
         /*一定要最后再改标志*/
         bp->b_flags &= ~(Buf::B_USING | Buf::B_ASYNC);
+        //如果B_WANTED 唤醒一个等待的进程
+        
+        if (bp->b_flags & Buf::B_WANTED)
+        {
+            bp->b_flags &= ~Buf::B_WANTED;
+            lk.unlock();
+            bp->condv.notify_all();
+        }
     }
 }
 /// @brief 读一个块，包含请求块、同步读、加done标，不含块释放
@@ -172,10 +189,9 @@ Buf *BufferManager::Bread(int dev, int blkno)
     bp->b_flags |= Buf::BufFlag::B_READ;
    
     DeviceManager::getInst()->GetBlockDevice(dev)->addToATA(bp);
-    //别忘记等待IO结束
-    std::unique_lock<std::mutex> lk(buf_mutex[bp->b_no]);
-    bp->condv.wait(lk);
-    printf("Bread return\n");
+    //同步等待IO结束
+    IOwait(bp);
+    Utility::DebugInfo("Bread return\n");
     return bp;
 }
 
@@ -183,7 +199,15 @@ Buf &BufferManager::GetBFreeList()
 {
     return bFreeList;
 }
-/// @brief 拿到一个块并已经对缓存完成处理后，完成同步或异步写，设置B_DONE标志并释放
+
+void BufferManager::IOwait(Buf*bp)
+{
+    std::unique_lock<std::mutex> lk(buf_mutex[bp->b_no]);
+    bp->condv.wait(lk);
+}
+
+
+/// @brief 拿到一个块并已经对缓存完成处理后，加B_USING,完成同步或异步写；如果是同步，设置B_DONE标志并释放
 /// @param bp
 void BufferManager::Bwrite(Buf *bp)
 {
@@ -198,10 +222,10 @@ void BufferManager::Bwrite(Buf *bp)
     if ((flags & Buf::B_ASYNC) == 0)
     {
         /* 同步写，需要等待I/O操作结束 */
-        std::unique_lock<std::mutex> lk(buf_mutex[bp->b_no]);
-        bp->condv.wait(lk);
+        IOwait(bp);
+        Brelse(bp);
     }
-    Brelse(bp);
+    //异步不负责释放
     
     return;
 }
@@ -215,7 +239,7 @@ void BufferManager::Bdwrite(Buf *bp)
     this->Brelse(bp);
     return;
 }
-/// @brief 异步写，完成后释放。在Bwrite中注册了线程来调用。对缓存块加锁，注意加锁的位置尽量覆盖对缓存的更改。
+/// @brief 异步写，完成后释放。
 /// @param bp
 void BufferManager::Bawrite(Buf *bp)
 {

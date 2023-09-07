@@ -30,7 +30,7 @@ void VirtualDisk::ATARun()
         }
         if(true){
             
-            Utility::DebugInfo("VirtualDisk::ATARun : befor rw\n");
+            Utility::DebugInfo("VirtualDisk::ATARun : before rw\n");
             p->b_back = nullptr;
             p->b_forw = nullptr;
 
@@ -43,18 +43,15 @@ void VirtualDisk::ATARun()
                 this->Read(p);
             }
             Utility::DebugInfo("VirtualDisk::ATARun : after\n");
-            std::unique_lock<std::mutex> lkblk(BufferManager::getInst()->buf_mutex[p->b_no]);
+           
             p->b_flags |= Buf::BufFlag::B_DONE;
 
             if(p->b_flags&Buf::BufFlag::B_ASYNC)
             {
                 //直接释放块
-                bool isWanted = p->b_flags & Buf::BufFlag::B_WANTED;
-                BufferManager::getInst()->Brelse(p); // 去B_USING、B_ASYNC
-                if (isWanted)
-                {
-                    p->condv.notify_all();
-                }
+
+                BufferManager::getInst()->Brelse(p); // 去B_USING、B_ASYNC、唤醒B_WANTED
+
             }
             else
             {
@@ -133,7 +130,7 @@ VirtualDisk::VirtualDisk(int _devId, int _NSECTOR, char const *name) : BlockDevi
         return;
     }
     
-    std::cout << "disk activate failed." << std::endl;
+    Utility::Panic("disk activate failed.\n");
 }
 int VirtualDisk::bnoToMem(int bno)
 {

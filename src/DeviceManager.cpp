@@ -14,6 +14,7 @@ DeviceManager::DeviceManager()
 
 DeviceManager::~DeviceManager()
 {
+    
     for (int i = 0; i < MAX_DEVICE_NUM; i++)
     {
         if (DevTable[i] != nullptr)

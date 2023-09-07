@@ -7,20 +7,22 @@
 #include <cstring>
 #include <fstream>
 
-#define RUN_TEST_CASE true
-#define TEST_BUFFER 1
+#define SHOW_DEBUG_INFO false
+#define RUN_TEST_CASE false
+#define TEST_BUFFER 0
 #define TEST_FLUSH 0
 #define FORMAT_DISK 0
 #define TEST_CREATE 0
 #define TEST_WRITE 0
 #define TEST_READ 0
-#define TEST_CRW 0 // 读写综合测试
+#define TEST_CRW 1 // 读写综合测试
 
 // 静态对象实例化
 //  涉及到析构时资源有序释放，因此实例化的顺序不能改
-DeviceManager DeviceManager::inst;
+
 BufferManager BufferManager::inst;
-User User::inst;
+DeviceManager DeviceManager::inst;//析构时完成flush 需要保留BufferManager
+User User::inst(SHOW_DEBUG_INFO);//show debug info 
 FileSystem FileSystem::inst;
 FileManager FileManager::inst;
 
@@ -56,6 +58,7 @@ int main()
     }
     if (TEST_FLUSH)
     {
+        printf("=====test flush begin======\n");
         bufferManager.showFreeList();
         Buf *b0 = bufferManager.GetBlk(0, 202);
         Buf *b1 = bufferManager.GetBlk(0, 203);
@@ -69,7 +72,9 @@ int main()
         bufferManager.Bdwrite(b2);
         bufferManager.showFreeList();
         bufferManager.Bflush(0);
+        
         bufferManager.showFreeList();
+        printf("=====test flush end======\n");
     }
     if (FORMAT_DISK)
     {
@@ -220,6 +225,6 @@ int main()
     shell.Start(Shell::DebugMode::OFF);
 
 #endif
-
+    
     return 0;
 }

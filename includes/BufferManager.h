@@ -32,6 +32,7 @@ public:
     void ClrBuf(Buf *bp);   /* 清空缓冲区内容 */
     void Bflush(short dev); /* 将dev指定设备队列中延迟写的缓存全部输出到磁盘 */
     Buf &GetBFreeList();    /* 获取自由缓存队列控制块Buf对象引用 */
+    void IOwait(Buf* bp);
     static BufferManager *getInst() { return &inst; };
     std::mutex buf_mutex[NBUF]; /*解决异步写和getblk进程冲突*/
 protected:
